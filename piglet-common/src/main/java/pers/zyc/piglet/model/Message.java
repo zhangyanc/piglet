@@ -21,11 +21,11 @@ public class Message {
 	private String topic;
 	
 	/**
-	 * 接入者
+	 * 订阅者
 	 */
 	@Getter
 	@Setter
-	private String joiner;
+	private String subscriber;
 	
 	/**
 	 * 消息体

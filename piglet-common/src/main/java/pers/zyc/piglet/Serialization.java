@@ -79,7 +79,7 @@ public class Serialization {
 
 	public static void writeMessage(ByteBuf byteBuf, Message message) {
 		writeString(byteBuf, message.getTopic());
-		writeString(byteBuf, message.getJoiner());
+		writeString(byteBuf, message.getSubscriber());
 		byteBuf.writeLong(message.getClientSendTime());
 		byteBuf.writeInt(message.getBody().length);
 		byteBuf.writeBytes(message.getBody());
@@ -99,7 +99,7 @@ public class Serialization {
 	public static Message readMessage(ByteBuf byteBuf) {
 		Message message = new Message();
 		message.setTopic(readString(byteBuf));
-		message.setJoiner(readString(byteBuf));
+		message.setSubscriber(readString(byteBuf));
 		message.setClientSendTime(byteBuf.readLong());
 		byte[] body = new byte[byteBuf.readInt()];
 		byteBuf.readBytes(body);

@@ -17,7 +17,7 @@ public class Connection {
 	private String version;
 	@Getter
 	@Setter
-	private String joiner;
+	private String subscriber;
 	@Getter
 	@Setter
 	private Language language;

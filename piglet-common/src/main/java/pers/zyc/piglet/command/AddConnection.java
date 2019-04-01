@@ -16,7 +16,7 @@ import pers.zyc.tools.network.Request;
 public class AddConnection extends Request {
 	
 	@Getter
-	private String joiner;
+	private String subscriber;
 	
 	@Getter
 	private String token;
@@ -27,9 +27,9 @@ public class AddConnection extends Request {
 	@Getter
 	private Language language;
 	
-	public AddConnection(String joiner, String token, ConnectionId connectionId) {
+	public AddConnection(String subscriber, String token, ConnectionId connectionId) {
 		super(CommandTypes.ADD_CONNECTION);
-		this.joiner = joiner;
+		this.subscriber = subscriber;
 		this.token = token;
 		this.connectionId = connectionId;
 		language = Language.JAVA;
@@ -41,7 +41,7 @@ public class AddConnection extends Request {
 	
 	@Override
 	protected void encodeBody(ByteBuf byteBuf) throws Exception {
-		Serialization.writeString(byteBuf, joiner);
+		Serialization.writeString(byteBuf, subscriber);
 		Serialization.writeString(byteBuf, token);
 		byteBuf.writeByte(language.ordinal());
 		byteBuf.writeBytes(connectionId.getConnectionId().getBytes(UTF_8));
@@ -49,7 +49,7 @@ public class AddConnection extends Request {
 	
 	@Override
 	protected void decodeBody(ByteBuf byteBuf) throws Exception {
-		joiner = Serialization.readString(byteBuf);
+		subscriber = Serialization.readString(byteBuf);
 		token = Serialization.readString(byteBuf);
 		language = Language.values()[byteBuf.readByte()];
 		byte[] connectionId = new byte[byteBuf.readableBytes()];
@@ -59,7 +59,7 @@ public class AddConnection extends Request {
 	
 	public Connection newConnection() {
 		Connection connection = new Connection();
-		connection.setJoiner(joiner);
+		connection.setSubscriber(subscriber);
 		connection.setLanguage(language);
 		connection.setVersion(connectionId.getClientId().getVersion());
 		connection.setId(connectionId.getConnectionId());
