@@ -21,13 +21,6 @@ public class Message {
 	private String topic;
 	
 	/**
-	 * 订阅者
-	 */
-	@Getter
-	@Setter
-	private String subscriber;
-	
-	/**
 	 * 消息体
 	 */
 	@Getter

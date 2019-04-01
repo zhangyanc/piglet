@@ -1,6 +1,7 @@
 package pers.zyc.piglet;
 
 import io.netty.buffer.ByteBuf;
+import pers.zyc.piglet.model.BrokerMessage;
 import pers.zyc.piglet.model.Message;
 import pers.zyc.tools.network.Protocol;
 
@@ -79,7 +80,6 @@ public class Serialization {
 
 	public static void writeMessage(ByteBuf byteBuf, Message message) {
 		writeString(byteBuf, message.getTopic());
-		writeString(byteBuf, message.getSubscriber());
 		byteBuf.writeLong(message.getClientSendTime());
 		byteBuf.writeInt(message.getBody().length);
 		byteBuf.writeBytes(message.getBody());
@@ -97,9 +97,8 @@ public class Serialization {
 	}
 
 	public static Message readMessage(ByteBuf byteBuf) {
-		Message message = new Message();
+		Message message = new BrokerMessage();
 		message.setTopic(readString(byteBuf));
-		message.setSubscriber(readString(byteBuf));
 		message.setClientSendTime(byteBuf.readLong());
 		byte[] body = new byte[byteBuf.readInt()];
 		byteBuf.readBytes(body);

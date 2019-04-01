@@ -1,6 +1,7 @@
 package pers.zyc.piglet.command;
 
 import io.netty.buffer.ByteBuf;
+import lombok.Getter;
 import pers.zyc.piglet.CommandTypes;
 import pers.zyc.piglet.Serialization;
 import pers.zyc.piglet.SystemCode;
@@ -17,6 +18,7 @@ import java.util.stream.Stream;
  */
 public class SendMessage extends Request {
 	
+	@Getter
 	private Message[] messages;
 	
 	public SendMessage(Message[] messages) {

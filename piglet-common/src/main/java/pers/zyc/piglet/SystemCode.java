@@ -21,6 +21,10 @@ public enum SystemCode {
 	
 	CONNECTION_ALREADY_EXISTS(-101, "Connection already exists"),
 	CONNECTION_NOT_EXISTS(-102, "Connection not exists"),
+	PRODUCER_ALREADY_EXISTS(-103, "Producer already exists"),
+	PRODUCER_NOT_EXISTS(-104, "Producer not exists"),
+	
+	
 	
 	;
 	

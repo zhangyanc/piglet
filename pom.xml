@@ -47,6 +47,10 @@
             <artifactId>tools-network</artifactId>
         </dependency>
         <dependency>
+            <groupId>pers.zyc.tools</groupId>
+            <artifactId>tools-utils</artifactId>
+        </dependency>
+        <dependency>
             <groupId>pers.zyc.piglet</groupId>
             <artifactId>piglet-common</artifactId>
         </dependency>
