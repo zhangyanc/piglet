@@ -61,16 +61,22 @@ public class BooleanResponse extends Response {
 		return create(requestId, SystemCode.SUCCESS);
 	}
 	
+	/**
+	 * 创建失败应答
+	 *
+	 * @param requestId 请求id
+	 * @param exception 异常
+	 */
 	public static BooleanResponse create(int requestId, SystemException exception) {
 		return create(requestId, exception.getCode(), exception.getMessage());
 	}
 	
 	/**
-	 * 创建失败应答
+	 * 创建应答
 	 *
 	 * @param requestId 请求id
-	 * @param code 错误码
-	 * @param msg 错误信息
+	 * @param code 响应码
+	 * @param msg 响应信息
 	 */
 	public static BooleanResponse create(int requestId, int code, String msg) {
 		BooleanResponse booleanResponse = new BooleanResponse(requestId);
@@ -83,7 +89,7 @@ public class BooleanResponse extends Response {
 	 * 创建应答
 	 *
 	 * @param requestId 请求id
-	 * @param systemCode 错误码
+	 * @param systemCode 响应码
 	 */
 	public static BooleanResponse create(int requestId, SystemCode systemCode) {
 		return create(requestId, systemCode.getCode(), systemCode.getMsg());

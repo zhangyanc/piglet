@@ -15,6 +15,16 @@ public class SystemException extends RuntimeException {
 		this.code = code;
 	}
 	
+	public SystemException(Throwable cause, int code) {
+		super(cause);
+		this.code = code;
+	}
+	
+	public SystemException(String msg, Throwable cause, int code) {
+		super(msg, cause);
+		this.code = code;
+	}
+	
 	public SystemException(SystemCode systemCode) {
 		super(systemCode.getMsg());
 		this.code = systemCode.getCode();
