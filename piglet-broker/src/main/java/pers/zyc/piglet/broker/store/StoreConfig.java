@@ -28,7 +28,7 @@ public class StoreConfig {
 	 * 消息索引目录
 	 */
 	@Getter
-	private final File queueDir;
+	private final File indexDir;
 	
 	/**
 	 * 索引检查点文件
@@ -85,7 +85,7 @@ public class StoreConfig {
 		
 		this.dataDir = dataDir;
 		this.logDir = new File(dataDir, "log/");
-		this.queueDir = new File(dataDir, "queue/");
+		this.indexDir = new File(dataDir, "index/");
 		this.checkpointFile = new File(dataDir, "checkpoint");
 		this.consumeOffsetFile = new File(dataDir, "consume-offset");
 		this.topicQueuesFile = new File(dataDir, "topic-queues");

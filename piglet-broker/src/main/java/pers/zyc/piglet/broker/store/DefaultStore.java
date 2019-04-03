@@ -17,6 +17,8 @@ public class DefaultStore extends Service implements Store {
 	private RandomAccessFile lockRaf;
 	private FileLock fileLock;
 	
+	private CheckpointRecovery checkpointRecovery;
+	
 	public DefaultStore(StoreConfig config) {
 		this.config = config;
 	}
@@ -27,22 +29,22 @@ public class DefaultStore extends Service implements Store {
 		if (!logDir.exists() && !logDir.mkdir() && !logDir.exists()) {
 			throw new IllegalStateException("Create log directory failed, file: " + logDir);
 		}
-		File queueDir = config.getQueueDir();
-		if (!queueDir.exists() && !queueDir.mkdir() && !queueDir.exists()) {
-			throw new IllegalStateException("Create queue directory failed, file: " + queueDir);
-		}
-		File checkpointFile = config.getCheckpointFile();
-		if (!checkpointFile.exists() && !checkpointFile.createNewFile() && !checkpointFile.exists()) {
-			throw new IllegalStateException("Create checkpoint file failed, file: " + checkpointFile);
+		File indexDir = config.getIndexDir();
+		if (!indexDir.exists() && !indexDir.mkdir() && !indexDir.exists()) {
+			throw new IllegalStateException("Create queue directory failed, file: " + indexDir);
 		}
 		File lockFile = config.getLockFile();
 		if (!lockFile.exists() && !lockFile.createNewFile() && !lockFile.exists()) {
 			throw new IllegalStateException("Create lock file failed, file: " + lockFile);
 		}
+		
+		checkpointRecovery = new CheckpointRecovery(config.getCheckpointFile());
 	}
 	
 	@Override
-	protected void doStart() {
+	protected void doStart() throws Exception {
+		lockFile();
+		
 		
 	}
 	
@@ -50,6 +52,7 @@ public class DefaultStore extends Service implements Store {
 		lockRaf = new RandomAccessFile(config.getLockFile(), "rw");
 		fileLock = lockRaf.getChannel().tryLock();
 		if (fileLock == null) {
+			lockRaf.close();
 			throw new IllegalStateException("File lock failed, it's likely locked by another progress");
 		}
 	}
