@@ -20,13 +20,12 @@ import java.util.zip.Adler32;
  * @author zhangyancheng
  */
 @Slf4j
-public class CheckpointRecovery extends Service implements Persistently {
+public class Checkpoint extends Service implements Persistently {
 	private static final int DATA_LENGTH = 16 + 8;
 	private static final int NEXT_POS = 1000;
 	
-	private final File checkpointFile;
-	
-	private FileChannel checkpointFC;
+	private final File file;
+	private FileChannel fileChannel;
 	private ByteBuffer dataBuffer;
 	
 	@Getter
@@ -36,22 +35,22 @@ public class CheckpointRecovery extends Service implements Persistently {
 	@Getter
 	private long timestamp;
 	
-	CheckpointRecovery(File checkpointFile) {
-		this.checkpointFile = checkpointFile;
+	Checkpoint(File file) {
+		this.file = file;
 	}
 	
 	@Override
 	protected void beforeStart() throws Exception {
-		if (!checkpointFile.exists() && !checkpointFile.createNewFile() && !checkpointFile.exists()) {
-			throw new IllegalStateException("Create checkpoint file failed, file: " + checkpointFile);
+		if (!file.exists() && !file.createNewFile()) {
+			throw new IllegalStateException("Create checkpoint file failed, file: " + file);
 		}
-		checkpointFC = new RandomAccessFile(checkpointFile, "rw").getChannel();
+		fileChannel = new RandomAccessFile(file, "rw").getChannel();
 		dataBuffer = ByteBuffer.allocateDirect(DATA_LENGTH);
 	}
 	
 	@Override
 	protected void doStart() throws Exception {
-		long size = checkpointFC.size();
+		long size = fileChannel.size();
 		if (size >= DATA_LENGTH) {
 			readData(0);
 			if (!validData()) {
@@ -87,7 +86,7 @@ public class CheckpointRecovery extends Service implements Persistently {
 	@Override
 	protected void doStop() throws Exception {
 		((DirectBuffer) dataBuffer).cleaner().clean();
-		checkpointFC.close();
+		fileChannel.close();
 	}
 	
 	@Override
@@ -115,7 +114,7 @@ public class CheckpointRecovery extends Service implements Persistently {
 			// 双写，避免写入异常时仍有一份数据不被脏写
 			writeData(0);
 			writeData(NEXT_POS);
-			checkpointFC.force(true);
+			fileChannel.force(true);
 		} catch (IOException e) {
 			log.error("Checkpoint persistent error: {}", e.getMessage());
 		}
@@ -123,17 +122,17 @@ public class CheckpointRecovery extends Service implements Persistently {
 	
 	private void readData(int position) throws IOException {
 		dataBuffer.clear();
-		checkpointFC.position(position);
+		fileChannel.position(position);
 		while (dataBuffer.hasRemaining()) {
-			position += checkpointFC.read(dataBuffer, position);
+			fileChannel.read(dataBuffer);
 		}
 	}
 	
 	private void writeData(int position) throws IOException {
 		dataBuffer.rewind();
-		checkpointFC.position(position);
+		fileChannel.position(position);
 		while (dataBuffer.hasRemaining()) {
-			checkpointFC.write(dataBuffer);
+			fileChannel.write(dataBuffer);
 		}
 	}
 }

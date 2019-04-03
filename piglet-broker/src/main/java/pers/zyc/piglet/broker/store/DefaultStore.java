@@ -17,7 +17,7 @@ public class DefaultStore extends Service implements Store {
 	private RandomAccessFile lockRaf;
 	private FileLock fileLock;
 	
-	private CheckpointRecovery checkpointRecovery;
+	private Checkpoint checkpoint;
 	
 	public DefaultStore(StoreConfig config) {
 		this.config = config;
@@ -38,7 +38,7 @@ public class DefaultStore extends Service implements Store {
 			throw new IllegalStateException("Create lock file failed, file: " + lockFile);
 		}
 		
-		checkpointRecovery = new CheckpointRecovery(config.getCheckpointFile());
+		checkpoint = new Checkpoint(config.getCheckpointFile());
 	}
 	
 	@Override
