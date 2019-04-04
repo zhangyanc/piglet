@@ -24,7 +24,7 @@ public enum SystemCode {
 	PRODUCER_ALREADY_EXISTS(-103, "Producer already exists"),
 	PRODUCER_NOT_EXISTS(-104, "Producer not exists"),
 	
-	
+	STORE_BAD_FILE(-201, "Bad file")
 	
 	;
 	
