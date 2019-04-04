@@ -17,6 +17,7 @@ public enum SystemCode {
 	COMMAND_ARGS_INVALID(-10, "Command args invalid"),
 	CHECKSUM_WRONG(-11, "Checksum error"),
 	
+	ZK_DISCONNECTED(-50, "ZooKeeper disconnected"),
 	AUTH_FAILED(-80, "Auth failed"),
 	
 	CONNECTION_ALREADY_EXISTS(-101, "Connection already exists"),

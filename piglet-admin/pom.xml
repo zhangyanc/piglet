@@ -11,5 +11,14 @@
 
     <artifactId>piglet-admin</artifactId>
 
-
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework</groupId>
+            <artifactId>spring-context</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>pers.zyc.tools</groupId>
+            <artifactId>tools-zkclient</artifactId>
+        </dependency>
+    </dependencies>
 </project>
