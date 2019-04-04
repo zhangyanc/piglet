@@ -4,10 +4,10 @@ import io.netty.buffer.ByteBuf;
 import lombok.Getter;
 import lombok.Setter;
 import org.apache.commons.lang3.StringUtils;
-import pers.zyc.piglet.network.CommandTypes;
 import pers.zyc.piglet.Serialization;
 import pers.zyc.piglet.SystemCode;
 import pers.zyc.piglet.SystemException;
+import pers.zyc.piglet.network.CommandFactory;
 import pers.zyc.tools.network.Header;
 import pers.zyc.tools.network.Request;
 
@@ -25,7 +25,7 @@ public class GetCluster extends Request {
 	private String clientId;
 	
 	public GetCluster() {
-		super(CommandTypes.GET_CLUSTER);
+		super(CommandFactory.GET_CLUSTER);
 	}
 	
 	public GetCluster(Header header) {

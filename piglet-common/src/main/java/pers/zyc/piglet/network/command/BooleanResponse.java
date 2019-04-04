@@ -2,9 +2,9 @@ package pers.zyc.piglet.network.command;
 
 import io.netty.buffer.ByteBuf;
 import lombok.Getter;
-import pers.zyc.piglet.network.CommandTypes;
 import pers.zyc.piglet.SystemCode;
 import pers.zyc.piglet.SystemException;
+import pers.zyc.piglet.network.CommandFactory;
 import pers.zyc.tools.network.Header;
 import pers.zyc.tools.network.Response;
 
@@ -20,7 +20,7 @@ public class BooleanResponse extends Response {
 	private String msg;
 	
 	private BooleanResponse(int requestId) {
-		super(CommandTypes.BOOLEAN_ACK, requestId);
+		super(CommandFactory.BOOLEAN_ACK, requestId);
 	}
 	
 	public BooleanResponse(Header header) {

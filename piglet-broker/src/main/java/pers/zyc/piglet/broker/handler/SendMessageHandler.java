@@ -1,15 +1,15 @@
 package pers.zyc.piglet.broker.handler;
 
-import pers.zyc.piglet.network.CommandTypes;
 import pers.zyc.piglet.SystemCode;
 import pers.zyc.piglet.SystemException;
 import pers.zyc.piglet.broker.store.Store;
-import pers.zyc.piglet.network.command.BooleanResponse;
-import pers.zyc.piglet.network.command.SendMessage;
 import pers.zyc.piglet.model.BrokerMessage;
 import pers.zyc.piglet.model.Connection;
 import pers.zyc.piglet.model.Message;
 import pers.zyc.piglet.model.Producer;
+import pers.zyc.piglet.network.CommandFactory;
+import pers.zyc.piglet.network.command.BooleanResponse;
+import pers.zyc.piglet.network.command.SendMessage;
 import pers.zyc.tools.network.Response;
 import pers.zyc.tools.network.SingleTypeRequestHandler;
 import pers.zyc.tools.utils.SystemMillis;
@@ -27,7 +27,7 @@ public class SendMessageHandler extends SingleTypeRequestHandler<SendMessage> {
 	
 	@Override
 	public int supportedRequestType() {
-		return CommandTypes.SEND_MESSAGE;
+		return CommandFactory.SEND_MESSAGE;
 	}
 	
 	@Override

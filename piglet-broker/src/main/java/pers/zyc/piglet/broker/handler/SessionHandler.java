@@ -2,15 +2,18 @@ package pers.zyc.piglet.broker.handler;
 
 import io.netty.util.AttributeKey;
 import lombok.extern.slf4j.Slf4j;
-import pers.zyc.piglet.*;
+import pers.zyc.piglet.ConnectionId;
+import pers.zyc.piglet.ProducerId;
+import pers.zyc.piglet.SystemCode;
+import pers.zyc.piglet.SystemException;
 import pers.zyc.piglet.broker.SessionManager;
 import pers.zyc.piglet.broker.auth.Authentication;
-import pers.zyc.piglet.network.CommandTypes;
+import pers.zyc.piglet.model.Connection;
+import pers.zyc.piglet.model.Producer;
+import pers.zyc.piglet.network.CommandFactory;
 import pers.zyc.piglet.network.command.AddConnection;
 import pers.zyc.piglet.network.command.AddProducer;
 import pers.zyc.piglet.network.command.BooleanResponse;
-import pers.zyc.piglet.model.Connection;
-import pers.zyc.piglet.model.Producer;
 import pers.zyc.tools.network.BaseRequestHandler;
 import pers.zyc.tools.network.Request;
 import pers.zyc.tools.network.Response;
@@ -36,9 +39,9 @@ public class SessionHandler extends BaseRequestHandler {
 	@Override
 	public Response handle(Request request) throws Exception {
 		switch (request.getType()) {
-			case CommandTypes.ADD_CONNECTION:
+			case CommandFactory.ADD_CONNECTION:
 				return addConnection((AddConnection) request);
-			case CommandTypes.ADD_PRODUCER:
+			case CommandFactory.ADD_PRODUCER:
 				return addProducer((AddProducer) request);
 		}
 		return null;

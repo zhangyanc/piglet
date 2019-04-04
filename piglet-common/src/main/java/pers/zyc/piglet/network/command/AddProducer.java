@@ -2,9 +2,9 @@ package pers.zyc.piglet.network.command;
 
 import io.netty.buffer.ByteBuf;
 import lombok.Getter;
-import pers.zyc.piglet.network.CommandTypes;
 import pers.zyc.piglet.ProducerId;
 import pers.zyc.piglet.Serialization;
+import pers.zyc.piglet.network.CommandFactory;
 import pers.zyc.tools.network.Header;
 import pers.zyc.tools.network.Request;
 
@@ -20,7 +20,7 @@ public class AddProducer extends Request {
 	private ProducerId producerId;
 	
 	public AddProducer(String topic, ProducerId producerId) {
-		super(CommandTypes.ADD_PRODUCER);
+		super(CommandFactory.ADD_PRODUCER);
 		this.topic = topic;
 		this.producerId = producerId;
 	}

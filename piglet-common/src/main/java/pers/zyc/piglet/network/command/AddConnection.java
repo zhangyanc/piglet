@@ -3,9 +3,12 @@ package pers.zyc.piglet.network.command;
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import lombok.Getter;
-import pers.zyc.piglet.*;
+import pers.zyc.piglet.ConnectionId;
+import pers.zyc.piglet.IPUtil;
+import pers.zyc.piglet.Language;
+import pers.zyc.piglet.Serialization;
 import pers.zyc.piglet.model.Connection;
-import pers.zyc.piglet.network.CommandTypes;
+import pers.zyc.piglet.network.CommandFactory;
 import pers.zyc.tools.network.Header;
 import pers.zyc.tools.network.Request;
 
@@ -29,7 +32,7 @@ public class AddConnection extends Request {
 	private Language language;
 	
 	public AddConnection(String subscriber, String token, ConnectionId connectionId) {
-		super(CommandTypes.ADD_CONNECTION);
+		super(CommandFactory.ADD_CONNECTION);
 		this.subscriber = subscriber;
 		this.token = token;
 		this.connectionId = connectionId;
