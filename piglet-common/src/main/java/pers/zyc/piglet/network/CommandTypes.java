@@ -1,4 +1,4 @@
-package pers.zyc.piglet;
+package pers.zyc.piglet.network;
 
 /**
  * @author zhangyancheng

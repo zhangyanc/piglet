@@ -2,6 +2,7 @@ package pers.zyc.piglet.model;
 
 import lombok.Getter;
 import lombok.NonNull;
+import lombok.Setter;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -16,6 +17,14 @@ public class BrokerGroup {
 	 */
 	@Getter
 	private final String code;
+	
+	@Getter
+	@Setter
+	private Permission permission;
+	
+	@Getter
+	@Setter
+	private short weight;
 	
 	/**
 	 * 组内Broker列表

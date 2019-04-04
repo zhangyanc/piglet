@@ -1,8 +1,8 @@
-package pers.zyc.piglet.command;
+package pers.zyc.piglet.network.command;
 
 import io.netty.buffer.ByteBuf;
 import lombok.Getter;
-import pers.zyc.piglet.CommandTypes;
+import pers.zyc.piglet.network.CommandTypes;
 import pers.zyc.piglet.Serialization;
 import pers.zyc.piglet.SystemCode;
 import pers.zyc.piglet.SystemException;

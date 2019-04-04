@@ -1,10 +1,11 @@
-package pers.zyc.piglet.command;
+package pers.zyc.piglet.network.command;
 
 import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import lombok.Getter;
 import pers.zyc.piglet.*;
 import pers.zyc.piglet.model.Connection;
+import pers.zyc.piglet.network.CommandTypes;
 import pers.zyc.tools.network.Header;
 import pers.zyc.tools.network.Request;
 
