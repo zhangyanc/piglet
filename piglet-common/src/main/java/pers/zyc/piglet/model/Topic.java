@@ -3,12 +3,14 @@ package pers.zyc.piglet.model;
 import lombok.Getter;
 import lombok.Setter;
 
-import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 /**
  * @author zhangyancheng
  */
+@Getter
+@Setter
 public class Topic {
 	
 	public enum StoreLevel {
@@ -31,41 +33,40 @@ public class Topic {
 	/**
 	 * 主题代码
 	 */
-	@Setter
-	@Getter
 	private String code;
 	
 	/**
 	 * 名称或者描述
 	 */
-	@Setter
-	@Getter
 	private String name;
 	
 	/**
 	 * 存储级别
 	 */
-	@Setter
-	@Getter
 	private StoreLevel level;
 	
 	/**
 	 * 是否广播
 	 */
-	@Setter
-	@Getter
 	private boolean broadcast;
 	
 	/**
 	 * 队列数
 	 */
-	@Setter
-	@Getter
 	private int queues;
 	
 	/**
 	 * 分组
 	 */
-	@Getter
-	private final Set<String> groups = new HashSet<>();
+	private Set<String> groups;
+	
+	/**
+	 * 消费者策略
+	 */
+	private Map<String, ConsumePolicy> consumers;
+	
+	/**
+	 * 生产者策略
+	 */
+	private Map<String, ProducePolicy> producers;
 }
