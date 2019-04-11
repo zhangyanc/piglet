@@ -15,7 +15,7 @@ public class BrokerCluster {
 	 * 主题
 	 */
 	@Getter
-	private final String topic;
+	private final Topic topic;
 	
 	/**
 	 * 主题分组列表
@@ -23,7 +23,7 @@ public class BrokerCluster {
 	@Getter
 	private final List<BrokerGroup> groups = new ArrayList<>();
 	
-	public BrokerCluster(@NonNull String topic) {
+	public BrokerCluster(@NonNull Topic topic) {
 		this.topic = topic;
 	}
 	

@@ -3,6 +3,7 @@ package pers.zyc.piglet.admin.cluster;
 import com.fasterxml.jackson.core.type.TypeReference;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.zookeeper.data.Stat;
+import org.springframework.beans.BeanUtils;
 import pers.zyc.piglet.JSONUtil;
 import pers.zyc.piglet.model.*;
 import pers.zyc.tools.utils.event.EventBus;
@@ -13,6 +14,7 @@ import pers.zyc.tools.zkclient.NodeEventWatcher;
 import pers.zyc.tools.zkclient.ZKClient;
 import pers.zyc.tools.zkclient.listener.DataEventListener;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -42,8 +44,8 @@ public class ClusterManager extends Service implements EventSource<ClusterEvent>
 	protected void doStart() throws Exception {
 		clusterEventBus.start();
 		if (zkClient.isConnected()) {
-			updateBroker();
-			updateTopic();
+			updateBroker(zkClient.getData(clusterConfig.getBrokerPath()));
+			updateTopic(zkClient.getData(clusterConfig.getTopicPath()));
 		}
 		brokerNodeWatcher = zkClient.createNodeEventWatcher(clusterConfig.getBrokerPath());
 		brokerNodeWatcher.addListener(this);
@@ -86,11 +88,13 @@ public class ClusterManager extends Service implements EventSource<ClusterEvent>
 		log.error("Node should not be deleted, path: " + path);
 	}
 	
-	private void updateBroker() throws Exception {
-		updateBroker(zkClient.getData(clusterConfig.getBrokerPath()));
-	}
-	
-	private void updateBroker(byte[] data) throws Exception {
+	/**
+	 * 更新Broker节点数据
+	 *
+	 * @param data broker节点数据
+	 * @throws IOException json数据转换异常
+	 */
+	private void updateBroker(byte[] data) throws IOException {
 		List<Broker> brokerList = JSONUtil.parseObject(new String(data, StandardCharsets.UTF_8),
 				new TypeReference<List<Broker>>(){});
 		
@@ -104,11 +108,13 @@ public class ClusterManager extends Service implements EventSource<ClusterEvent>
 		this.groupMap = groupMap;
 	}
 	
-	private void updateTopic() throws Exception {
-		updateTopic(zkClient.getData(clusterConfig.getTopicPath()));
-	}
-	
-	private void updateTopic(byte[] data) throws Exception {
+	/**
+	 * 更新主题节点数据
+	 *
+	 * @param data 主题节点数据
+	 * @throws IOException json数据转换异常
+	 */
+	private void updateTopic(byte[] data) throws IOException {
 		List<Topic> topicList = JSONUtil.parseObject(new String(data, StandardCharsets.UTF_8),
 				new TypeReference<List<Topic>>() {});
 		
@@ -118,6 +124,29 @@ public class ClusterManager extends Service implements EventSource<ClusterEvent>
 		this.topicGroupMap = topicGroupMap;
 	}
 	
+	/**
+	 * 移除无关订阅者的生产消费策略
+	 *
+	 * @param topic 主题
+	 * @param subscriber 订阅者
+	 * @return 只包含当前订阅生产和消费策略的主题
+	 */
+	private static Topic removeOtherSubscriber(Topic topic, String subscriber) {
+		Topic result = new Topic();
+		BeanUtils.copyProperties(topic, result, "consumers", "producers");
+		Optional.ofNullable(topic.getConsumers().get(subscriber))
+				.ifPresent(policy -> result.setConsumers(Collections.singletonMap(subscriber, policy)));
+		Optional.ofNullable(topic.getProducers().get(subscriber))
+				.ifPresent(policy -> result.setProducers(Collections.singletonMap(subscriber, policy)));
+		return result;
+	}
+	
+	/**
+	 * 计算订阅者的集群信息
+	 *
+	 * @param subscriber 订阅者
+	 * @return 以主题未单位的集群信息列表
+	 */
 	List<BrokerCluster> getCluster(String subscriber) {
 		List<BrokerCluster> result = new ArrayList<>();
 		topicGroupMap.forEach((topic, topicGroup) -> {
@@ -137,12 +166,12 @@ public class ClusterManager extends Service implements EventSource<ClusterEvent>
 				return;
 			}
 			
-			BrokerCluster brokerCluster = new BrokerCluster(topic.getCode());
-			
+			BrokerCluster brokerCluster = new BrokerCluster(removeOtherSubscriber(topic, subscriber));
 			Permission groupPermUnion = Permission.NONE;
-			topicGroup.forEach(group -> {
+			for (BrokerGroup group : topicGroup) {
+				BrokerGroup brokerGroup = group.clone();
 				Permission groupPerm = Permission.NONE;
-				group.getBrokers().forEach(broker -> {
+				for (Broker broker : brokerGroup.getBrokers()) {
 					Permission brokerPerm = broker.getPermission();
 					switch (broker.getRole()) {
 						case MASTER:
@@ -153,23 +182,24 @@ public class ClusterManager extends Service implements EventSource<ClusterEvent>
 						default:
 							brokerPerm = Permission.NONE;
 					}
+					broker.setPermission(brokerPerm);
 					if (brokerPerm.isWritable()) {
-						groupPerm.addWrite();
-						groupPermUnion.addWrite();
+						groupPerm = groupPerm.addWrite();
+						groupPermUnion = groupPermUnion.addWrite();
 					}
 					if (brokerPerm.isReadable()) {
-						groupPerm.addRead();
-						groupPermUnion.addRead();
+						groupPerm = groupPerm.addRead();
+						groupPermUnion = groupPermUnion.addRead();
 					}
-				});
-				BrokerGroup brokerGroup = new BrokerGroup(group.getCode());
-				brokerGroup.setWeight(group.getWeight());
+				}
 				brokerGroup.setPermission(groupPerm);
 				brokerCluster.addGroup(brokerGroup);
-			});
-			
+			}
+			if ((clusterPerm.isWritable() && groupPermUnion.isWritable()) ||
+					(clusterPerm.isReadable() && groupPermUnion.isReadable())) {
+				result.add(brokerCluster);
+			}
 		});
-		
-		return null;
+		return result;
 	}
 }

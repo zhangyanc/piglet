@@ -29,16 +29,13 @@ public class ClusterServer extends NetServer {
 		zkClient = new ZKClient(clusterConfig.getZkAddress());
 		boolean zkConnected = zkClient.waitToConnected(10, TimeUnit.SECONDS);
 		if (!zkConnected) {
-			// cluster强依赖zookeeper，无法连通则无法工作
+			// cluster强依赖zookeeper，未连通则无法工作
 			throw new SystemException(SystemCode.ZK_DISCONNECTED);
 		}
-	}
-	
-	@Override
-	protected void doStart() {
 		clusterManager = new ClusterManager(clusterConfig, zkClient);
-		GetClusterHandler getClusterHandler = new GetClusterHandler();
 		
+		GetClusterHandler getClusterHandler = new GetClusterHandler(clusterManager,
+				clusterConfig.getClusterChangeWaitTimeout());
 		setPort(clusterConfig.getServerPort());
 		setCommandFactory(new CommandFactory());
 		setRequestHandlerFactory(requestType -> {
@@ -48,6 +45,11 @@ public class ClusterServer extends NetServer {
 			}
 			return null;
 		});
+	}
+	
+	@Override
+	protected void doStart() {
+		clusterManager.start();
 		super.doStart();
 	}
 	

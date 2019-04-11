@@ -23,4 +23,8 @@ public class ClusterConfig {
 	@Getter
 	@Setter
 	private String topicPath;
+	
+	@Getter
+	@Setter
+	private int clusterChangeWaitTimeout;
 }

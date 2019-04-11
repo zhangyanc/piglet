@@ -3,6 +3,7 @@ package pers.zyc.piglet.model;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
@@ -69,4 +70,18 @@ public class Topic {
 	 * 生产者策略
 	 */
 	private Map<String, ProducePolicy> producers;
+	
+	public void addConsumer(String subscriber, ConsumePolicy policy) {
+		if (consumers == null) {
+			consumers = new HashMap<>();
+		}
+		consumers.put(subscriber, policy);
+	}
+	
+	public void addProducer(String subscriber, ProducePolicy policy) {
+		if (producers == null) {
+			producers = new HashMap<>();
+		}
+		producers.put(subscriber, policy);
+	}
 }

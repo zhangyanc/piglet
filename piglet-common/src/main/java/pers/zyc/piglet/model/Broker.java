@@ -48,4 +48,16 @@ public class Broker {
 	 * 机房
 	 */
 	private DataCenter dataCenter;
+	
+	public Broker() {
+	}
+	
+	public Broker(Broker target) {
+		ip = target.getIp();
+		port = target.getPort();
+		name = target.getName();
+		group = target.getGroup();
+		role = target.getRole();
+		permission = target.getPermission();
+	}
 }

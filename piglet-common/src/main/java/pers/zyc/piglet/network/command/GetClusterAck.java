@@ -10,8 +10,12 @@ import pers.zyc.piglet.model.*;
 import pers.zyc.piglet.network.CommandFactory;
 import pers.zyc.tools.network.Header;
 import pers.zyc.tools.network.Response;
+import pers.zyc.tools.utils.IPUtil;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.stream.IntStream;
 
 /**
@@ -22,10 +26,6 @@ public class GetClusterAck extends Response {
 	@Getter
 	@Setter
 	private List<BrokerCluster> clusterList;
-	
-	@Getter
-	@Setter
-	private Map<String, Topic> topicMap;
 	
 	@Getter
 	@Setter
@@ -45,68 +45,58 @@ public class GetClusterAck extends Response {
 	
 	@Override
 	public void validate() throws Exception {
-		if (clusterList == null || topicMap == null) {
+		if (clusterList == null) {
 			throw new SystemException(SystemCode.COMMAND_ARGS_INVALID);
 		}
 	}
 	
 	/**
 	 * <i>协议格式：</i>
-	 * <per>
+	 * <pre>
+	 *     +----------+----------+      +----------+----------+ ---- +----------+----------+
+	 *     |   timeout(4B)       |    / |   topic 1           |      |   code(1BL)         |
+	 *     +----------+----------+      +----------+----------+ \__  +----------+----------+
+	 *     |   cluster size(4B)  |  /   |   group size(4B)    |    | |   name(1BL)         |
+	 *     +----------+----------+      +----------+----------+    \ +----------+----------+
+	 *     |   cluster 1         |      |   group 1           |      |   level(2B)         |
 	 *     +----------+----------+      +----------+----------+      +----------+----------+
-	 *     |   拉取超时（4字节）   |    / |   主题代码（1字节长度）|    / |  分组代码（1字节长度）|
+	 *     |   cluster 2         |  \   |   group 2           |      |   queues(2B)        |
 	 *     +----------+----------+      +----------+----------+      +----------+----------+
-	 *     |   集群个数（4字节）   |  /   |   分组个数（4字节）   |  /   |   分组权限（2字节）   |
-	 *     +----------+----------+      +----------+----------+      +----------+----------+       +----------+----------+
-	 *     |   集群1             |       |  分组1              |      |   分组权重（2字节）   |     / |   name（1字节长度）   |
-	 *     +----------+----------+      +----------+----------+      +----------+----------+       +----------+----------+
-	 *     |   集群2             |  \    |  分组2              |  \   |   Broker个数（4字节） |  /    |  group（1字节长度）  |
-	 *     +----------+----------+      +----------+----------+      +----------+----------+       +----------+----------+
-	 *     |     .               |   \  |    .                |    \ |   Broker1           |       |   ip（1字节长度）     |           |
-	 *     |     .               |      |    .                |      +----------+----------+       +----------+----------+
-	 *     |     .               |      |    .                |      |   Broker2           |   \   |   port（2字节）      |
-	 *     +----------+----------+      +----------+----------+      +----------+----------+       +----------+----------+
-	 *     |   集群n             |       |  分组n              |      |    .                |     \ |   role（2字节）      |
-	 *     +----------+----------+      +----------+----------+      |    .                |       +----------+----------+
-	 *     |   主题个数（4字节）   |                                   |    .                |       |   permission（2字节）|
-	 *     +----------+----------+ ---- +----------+----------+      +----------+----------+       +----------+----------+
-	 *     |   主题1             |       |  代码（1字节长度）    |      |   BrokerN           |
-	 *     +----------+----------+ \__  +----------+----------+      +----------+----------+
-	 *     |   主题2             |    |  |  名称（1字节长度）    |
-	 *     +----------+----------+    \ +----------+----------+
-	 *     |     .               |      |  级别（2字节）        |
-	 *     |     .               |      +----------+----------+
-	 *     |     .               |      |  队列数（2字节）      |
-	 *     +----------+----------+      +----------+----------+
-	 *     |   主题n             |       |  分组个数（4字节）    |
-	 *     +----------+----------+      +----------+----------+
-	 *                                  |  分组代码1（1字节长度）|
+	 *     |     .               |   \  |    .                |      |   group size(4B)    |
+	 *     |     .               |      |    .                |      +----------+----------+
+	 *     |     .               |      |    .                |      |   group code 1(1BL) |
+	 *     +----------+----------+      +----------+----------+      +----------+----------+
+	 *     |   cluster n         |   ___|   group n           |      |   group code 2(1BL) |
+	 *     +----------+----------+  |   +----------+----------+      +----------+----------+
+	 *                              |                                |    .                |
+	 *                              |-> +----------+----------+      |    .                |
+	 *                                  |   name(1BL)         |      |    .                |
+	 *                                  +----------+----------+      +----------+----------+
+	 *                                  |   group(1BL)        |      |   group code n(1BL) |
+	 *                                  +----------+----------+      +----------+----------+
+	 *                                  |   ip(4B)            |
 	 *                                  +----------+----------+
-	 *                                  |  分组代码2（1字节长度）|
+	 *                                  |   port(2B)          |
 	 *                                  +----------+----------+
-	 *                                  |     .               |
-	 *                                  |     .               |
-	 *                                  |     .               |
+	 *                                  |   role(2B)          |
 	 *                                  +----------+----------+
-	 *                                  |  分组代码n（1字节长度）|
+	 *                                  |   permission(2B)    |
 	 *                                  +----------+----------+
-	 * </per>
+	 * </pre>
 	 */
 	@Override
-	protected void encodeBody(ByteBuf byteBuf) throws Exception {
+	public void encodeBody(ByteBuf byteBuf) throws Exception {
 		if (cachedBody != null) {
 			byteBuf.writeBytes(cachedBody);
 		} else {
 			byteBuf.writeInt(getTimeout);
 			byteBuf.writeInt(clusterList.size());
 			clusterList.forEach(brokerCluster -> encodeBrokerCluster(byteBuf, brokerCluster));
-			byteBuf.writeInt(topicMap.size());
-			topicMap.values().forEach(topic -> encodeTopic(byteBuf, topic));
 		}
 	}
 	
 	private static void encodeBrokerCluster(ByteBuf byteBuf, BrokerCluster brokerCluster) {
-		Serialization.writeString(byteBuf, brokerCluster.getTopic());
+		encodeTopic(byteBuf, brokerCluster.getTopic());
 		byteBuf.writeInt(brokerCluster.getGroups().size());
 		brokerCluster.getGroups().forEach(group -> encodeBrokerGroup(byteBuf, group));
 	}
@@ -122,20 +112,22 @@ public class GetClusterAck extends Response {
 	private static void encodeBroker(ByteBuf byteBuf, Broker broker) {
 		Serialization.writeString(byteBuf, broker.getName());
 		Serialization.writeString(byteBuf, broker.getGroup());
-		Serialization.writeString(byteBuf, broker.getIp());
+		byteBuf.writeInt(IPUtil.toInt(broker.getIp()));
 		byteBuf.writeShort(broker.getPort());
 		byteBuf.writeShort(broker.getRole().ordinal());
 		byteBuf.writeShort(broker.getPermission().ordinal());
 	}
 	
 	private static BrokerCluster decodeBrokerCluster(ByteBuf byteBuf) {
-		BrokerCluster brokerCluster = new BrokerCluster(Serialization.readString(byteBuf));
+		BrokerCluster brokerCluster = new BrokerCluster(decodeTopic(byteBuf));
 		IntStream.range(0, byteBuf.readInt()).forEach(i -> brokerCluster.addGroup(decodeBrokerGroup(byteBuf)));
 		return brokerCluster;
 	}
 	
 	private static BrokerGroup decodeBrokerGroup(ByteBuf byteBuf) {
 		BrokerGroup brokerGroup = new BrokerGroup(Serialization.readString(byteBuf));
+		brokerGroup.setPermission(Permission.values()[byteBuf.readShort()]);
+		brokerGroup.setWeight(byteBuf.readShort());
 		IntStream.range(0, byteBuf.readInt()).forEach(i -> brokerGroup.addBroker(decodeBroker(byteBuf)));
 		return brokerGroup;
 	}
@@ -144,7 +136,7 @@ public class GetClusterAck extends Response {
 		Broker broker = new Broker();
 		broker.setName(Serialization.readString(byteBuf));
 		broker.setGroup(Serialization.readString(byteBuf));
-		broker.setIp(Serialization.readString(byteBuf));
+		broker.setIp(IPUtil.toIp(byteBuf.readInt()));
 		broker.setPort(byteBuf.readShort());
 		broker.setRole(Broker.Role.values()[byteBuf.readShort()]);
 		broker.setPermission(Permission.values()[byteBuf.readShort()]);
@@ -178,11 +170,5 @@ public class GetClusterAck extends Response {
 		int brokerClusterSize = byteBuf.readInt();
 		clusterList = new ArrayList<>(brokerClusterSize);
 		IntStream.range(0, brokerClusterSize).forEach(i -> clusterList.add(decodeBrokerCluster(byteBuf)));
-		int topicSize = byteBuf.readInt();
-		topicMap = new HashMap<>(topicSize);
-		IntStream.range(0, topicSize).forEach(i -> {
-			Topic topic = decodeTopic(byteBuf);
-			topicMap.put(topic.getCode(), topic);
-		});
 	}
 }
