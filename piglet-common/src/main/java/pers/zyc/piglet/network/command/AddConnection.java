@@ -4,13 +4,13 @@ import io.netty.buffer.ByteBuf;
 import io.netty.channel.Channel;
 import lombok.Getter;
 import pers.zyc.piglet.ConnectionId;
-import pers.zyc.piglet.IPUtil;
 import pers.zyc.piglet.Language;
 import pers.zyc.piglet.Serialization;
 import pers.zyc.piglet.model.Connection;
 import pers.zyc.piglet.network.CommandFactory;
 import pers.zyc.tools.network.Header;
 import pers.zyc.tools.network.Request;
+import pers.zyc.tools.utils.IPUtil;
 
 import java.net.InetSocketAddress;
 
