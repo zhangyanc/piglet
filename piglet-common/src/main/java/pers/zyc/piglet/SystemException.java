@@ -10,17 +10,17 @@ public class SystemException extends RuntimeException {
 	@Getter
 	private int code;
 	
-	public SystemException(String msg, int code) {
+	public SystemException(int code, String msg) {
 		super(msg);
 		this.code = code;
 	}
 	
-	public SystemException(Throwable cause, int code) {
+	public SystemException(int code, Throwable cause) {
 		super(cause);
 		this.code = code;
 	}
 	
-	public SystemException(String msg, Throwable cause, int code) {
+	public SystemException(int code, String msg, Throwable cause) {
 		super(msg, cause);
 		this.code = code;
 	}
@@ -33,5 +33,10 @@ public class SystemException extends RuntimeException {
 	public SystemException(SystemCode systemCode, Throwable cause) {
 		super(systemCode.getMsg(), cause);
 		this.code = systemCode.getCode();
+	}
+
+	@Override
+	public String getMessage() {
+		return "[" + code + "]" + super.getMessage();
 	}
 }

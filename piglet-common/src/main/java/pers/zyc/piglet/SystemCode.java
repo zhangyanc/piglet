@@ -13,6 +13,7 @@ public enum SystemCode {
 	SUCCESS(0, "Success"),
 	
 	UNKNOWN_ERROR(-1, "Unknown error"),
+	IO_EXCEPTION(-2, "IO exception"),
 	
 	COMMAND_ARGS_INVALID(-10, "Command args invalid"),
 	CHECKSUM_WRONG(-11, "Checksum error"),
@@ -24,8 +25,12 @@ public enum SystemCode {
 	CONNECTION_NOT_EXISTS(-102, "Connection not exists"),
 	PRODUCER_ALREADY_EXISTS(-103, "Producer already exists"),
 	PRODUCER_NOT_EXISTS(-104, "Producer not exists"),
-	
-	STORE_BAD_FILE(-201, "Bad file")
+	CONSUMER_ALREADY_EXISTS(-105, "Consumer already exists"),
+	CONSUMER_NOT_EXISTS(-106, "Consumer not exists"),
+	TOPIC_NOT_EXISTS(-107, "Topic not exists"),
+
+	STORE_BAD_FILE(-201, "Bad file"),
+	STORE_WRONG_OFFSET(-202, "Wrong offset"),
 	
 	;
 	
