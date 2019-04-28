@@ -2,7 +2,6 @@ package pers.zyc.piglet.network.command;
 
 import io.netty.buffer.ByteBuf;
 import lombok.Getter;
-import pers.zyc.piglet.Serialization;
 import pers.zyc.piglet.SystemCode;
 import pers.zyc.piglet.SystemException;
 import pers.zyc.piglet.model.Message;
@@ -40,12 +39,16 @@ public class SendMessage extends Request {
 	@Override
 	protected void encodeBody(ByteBuf byteBuf) throws Exception {
 		byteBuf.writeInt(messages.length);
-		Stream.of(messages).forEach(message -> Serialization.writeMessage(byteBuf, message));
+		Stream.of(messages).forEach(message -> message.decode(byteBuf));
 	}
 	
 	@Override
 	protected void decodeBody(ByteBuf byteBuf) throws Exception {
 		messages = new Message[byteBuf.readInt()];
-		IntStream.range(0, messages.length).forEach(i -> messages[i] = Serialization.readMessage(byteBuf));
+		IntStream.range(0, messages.length).forEach(i -> {
+			Message message = new Message();
+			message.decode(byteBuf);
+			messages[i] = message;
+		});
 	}
 }
