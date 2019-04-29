@@ -1,4 +1,4 @@
-package pers.zyc.piglet.broker.offset;
+package pers.zyc.piglet.broker.store.offset;
 
 import java.util.ArrayList;
 import java.util.List;
