@@ -1,6 +1,15 @@
 package pers.zyc.piglet.broker.store;
 
 import org.junit.Test;
+import pers.zyc.piglet.model.BrokerMessage;
+import pers.zyc.tools.utils.IPUtil;
+import pers.zyc.tools.utils.SystemMillis;
+
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executor;
+import java.util.concurrent.Executors;
 
 /**
  * @author zhangyancheng
@@ -14,21 +23,45 @@ public class StoreTest {
 		DefaultStore store = new DefaultStore(config);
 		store.start();
 
-		/*BrokerMessage message = new BrokerMessage();
-		message.setTopic("topic_x1");
-		message.setProducer("producer_x1");
+		System.out.println("");
+		store.stop();
+	}
 
-		LocalDateTime ldt = LocalDateTime.parse("2019-04-03T10:15:30");
-		message.setClientSendTime(ldt.toEpochSecond(ZoneOffset.UTC));
+	@Test
+	public void case_putMessage() throws Exception {
+		StoreConfig config = new StoreConfig("E:/export/pt");
 
-		message.setBody("test msg x1".getBytes());
-		message.setClientAddress(IPUtil.toBytes("172.52.49.30"));
-		message.setServerAddress(IPUtil.toBytes("172.52.12.189"));
+		DefaultStore store = new DefaultStore(config);
+		store.start();
 
-		store.putMessage(message);*/
+		store.getIndexService().addTopic("topic_x1", (short) 3);
 
-		//TimeUnit.SECONDS.sleep(35);
 
+		Executor executor = Executors.newFixedThreadPool(50);
+
+		int count = 10000;
+
+		CountDownLatch latch = new CountDownLatch(count);
+		long begin = SystemMillis.current();
+		while (count-- > 0) {
+			executor.execute(() -> {
+				BrokerMessage message = new BrokerMessage();
+				message.setTopic("topic_x1");
+				message.setProducer("producer_x1");
+
+				LocalDateTime ldt = LocalDateTime.parse("2019-04-03T10:15:30");
+				message.setClientSendTime(ldt.toEpochSecond(ZoneOffset.UTC));
+
+				message.setBody(new byte[1024]);
+				message.setClientAddress(IPUtil.toBytes("172.52.49.30"));
+				message.setServerAddress(IPUtil.toBytes("172.52.12.189"));
+
+				store.putMessage(message);
+				latch.countDown();
+			});
+		}
+		latch.await();
+		System.out.println(SystemMillis.current() - begin);
 		store.stop();
 	}
 }
