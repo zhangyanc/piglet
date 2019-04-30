@@ -1,5 +1,6 @@
 package pers.zyc.piglet.broker.store;
 
+import lombok.Getter;
 import pers.zyc.piglet.model.BrokerMessage;
 import pers.zyc.tools.utils.event.EventBus;
 import pers.zyc.tools.utils.event.EventListener;
@@ -20,6 +21,7 @@ public class DefaultStore extends Service implements Store {
 	private RandomAccessFile lockRaf;
 	private FileLock fileLock;
 
+	@Getter
 	private IndexService indexService;
 	private LogService logService;
 
@@ -40,8 +42,8 @@ public class DefaultStore extends Service implements Store {
 	
 	@Override
 	protected void doStart() throws Exception {
-		indexService = new IndexService(config.getIndexDir(), storeEventBus);
-		logService = new LogService(config.getLogDir(), storeEventBus, indexService);
+		indexService = new IndexService(config, storeEventBus);
+		logService = new LogService(config, storeEventBus, indexService);
 
 		storeEventBus.start();
 		indexService.start();

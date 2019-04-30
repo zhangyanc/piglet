@@ -34,7 +34,7 @@ public class AppendDir implements Closeable {
 	 */
 	private final TreeMap<Long, AppendFile> appendFileMap = new TreeMap<>();
 	
-	public AppendDir(File directory, int fileLength) {
+	public AppendDir(File directory, int fileLength) throws IOException {
 		this.directory = directory;
 		this.fileLength = fileLength;
 		if (!directory.exists() && !directory.mkdir()) {
@@ -88,14 +88,10 @@ public class AppendDir implements Closeable {
 	 * @param fileId 文件id
 	 * @return 新创建的文件
 	 */
-	private AppendFile createFile(long fileId) {
-		try {
-			AppendFile af = new AppendFile(fileId, fileLength, this);
-			appendFileMap.put(fileId, af);
-			return af;
-		} catch (IOException e) {
-			throw new SystemException(SystemCode.IO_EXCEPTION, e);
-		}
+	private AppendFile createFile(long fileId) throws IOException {
+		AppendFile af = new AppendFile(fileId, fileLength, this);
+		appendFileMap.put(fileId, af);
+		return af;
 	}
 
 	/**
@@ -103,14 +99,14 @@ public class AppendDir implements Closeable {
 	 *
 	 * @return 新创建的文件
 	 */
-	public AppendFile createNewFile() {
+	public AppendFile createNewFile() throws IOException {
 		return createFile(appendFileMap.isEmpty() ? 0 : appendFileMap.lastKey() + fileLength);
 	}
 
 	/**
 	 * @return 获取最后一个文件
 	 */
-	public AppendFile getLastFile() {
+	public AppendFile getLastFile() throws IOException {
 		if (appendFileMap.isEmpty()) {
 			return createFile(0);
 		}
@@ -122,15 +118,11 @@ public class AppendDir implements Closeable {
 	 *
 	 * @param offset 截断位置
 	 */
-	public void truncate(long offset) {
+	public void truncate(long offset) throws IOException {
 		for (AppendFile file : appendFileMap.values()) {
 			if (file.getMaxOffset() > offset) {
 				offset = file.getId() >= offset ? file.getId() : offset;
-				try {
-					file.truncate(offset);
-				} catch (IOException e) {
-					throw new SystemException(SystemCode.IO_EXCEPTION, e);
-				}
+				file.truncate(offset);
 			}
 		}
 	}

@@ -55,12 +55,16 @@ public class IndexQueue implements Persistently, Closeable{
 		if (!directory.exists() && !directory.mkdir()) {
 			throw new IllegalStateException("Create append directory failed, directory: " + directory);
 		}
-		appendDir = new AppendDir(directory, indexFileItems * IndexItem.LENGTH);
+		try {
+			appendDir = new AppendDir(directory, indexFileItems * IndexItem.LENGTH);
+		} catch (IOException e) {
+			throw new SystemException(SystemCode.IO_EXCEPTION);
+		}
 		itemBuffer = ByteBuffer.allocateDirect(IndexItem.LENGTH);
 	}
 
 	@Override
-	public void close() throws IOException {
+	public void close() {
 		((DirectBuffer) itemBuffer).cleaner().clean();
 		persistent();
 	}
@@ -71,9 +75,13 @@ public class IndexQueue implements Persistently, Closeable{
 	}
 
 	@Override
-	public void persistent() throws IOException {
+	public void persistent() {
 		// 因为切换文件时上一个文件已经持久化，因此只需要持久化最后一个文件
-		appendDir.getLastFile().persistent();
+		try {
+			appendDir.getLastFile().persistent();
+		} catch (IOException e) {
+			throw new SystemException(SystemCode.IO_EXCEPTION);
+		}
 	}
 
 	boolean delete() {
@@ -87,12 +95,12 @@ public class IndexQueue implements Persistently, Closeable{
 	 * @return 当前队列未正确刷盘的索引项的日志偏移量
 	 */
 	public long recover() {
-		// 因为切换文件时上一个文件已经刷盘，因此只需要恢复最后一个文件
-		AppendFile lastFile = appendDir.getLastFile();
-		offset = lastFile.getId();
-		int splits = 10;
-		int blockSize = lastFile.getFileLength() / splits;
 		try {
+			// 因为切换文件时上一个文件已经刷盘，因此只需要恢复最后一个文件
+			AppendFile lastFile = appendDir.getLastFile();
+			offset = lastFile.getId();
+			int splits = 10;
+			int blockSize = lastFile.getFileLength() / splits;
 			long logOffset = -1;
 			int readPosition = 0;
 			out:while (splits-- > 0) {
@@ -126,9 +134,8 @@ public class IndexQueue implements Persistently, Closeable{
 		itemBuffer.clear();
 		indexItem.encode(itemBuffer);
 		itemBuffer.flip();
-
-		AppendFile lastFile = appendDir.getLastFile();
 		try {
+			AppendFile lastFile = appendDir.getLastFile();
 			if (lastFile.remaining() < IndexItem.LENGTH) {
 				// 切换文件时需要将上一个文件刷盘
 				lastFile.persistent();

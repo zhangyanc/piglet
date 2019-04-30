@@ -5,7 +5,6 @@ import pers.zyc.piglet.SystemException;
 import pers.zyc.tools.utils.Locks;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -55,16 +54,8 @@ public class TopicIndex implements Persistently {
 	}
 
 	@Override
-	public void persistent() throws IOException {
-		Locks.execute(rwLock.readLock(), () -> {
-			for (IndexQueue queue : indexQueueMap.values()) {
-				queue.persistent();
-			}
-		});
-	}
-
-	public long recover() {
-		return indexQueueMap.values().parallelStream().mapToLong(IndexQueue::recover).min().orElse(-1);
+	public void persistent() {
+		Locks.execute(rwLock.readLock(), () -> indexQueueMap.values().forEach(IndexQueue::persistent));
 	}
 
 	private IndexQueue createQueue(short queueNum) {

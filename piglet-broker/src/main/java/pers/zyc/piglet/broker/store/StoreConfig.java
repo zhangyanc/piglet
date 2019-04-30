@@ -10,58 +10,56 @@ import java.io.IOException;
  * @author zhangyancheng
  */
 @Getter
+@Setter
 public class StoreConfig {
 	
 	/**
 	 * 数据文件目录
 	 */
-	private final File dataDir;
+	private File dataDir;
 	
 	/**
 	 * 消息日志目录
 	 */
-	private final File logDir;
+	private File logDir;
 	
 	/**
 	 * 消息索引目录
 	 */
-	private final File indexDir;
+	private File indexDir;
 
 	/**
 	 * 索引位置检查点文件
 	 */
-	private final File checkpointFile;
+	private File checkpointFile;
 	
 	/**
 	 * 消费位置
 	 */
-	private final File consumeOffsetFile;
+	private File consumeOffsetFile;
 	
 	/**
 	 * 锁文件
 	 */
-	private final File lockFile;
+	private File lockFile;
 	
 	/**
 	 * 日志文件大小（字节数）
 	 */
-	@Setter
 	private int logFileLength = 1024 * 1024 * 128;
 
-	@Setter
 	private int msgAppendQueueSize = 50000;
 
-	@Setter
 	private int msgCommitQueueSize = 50000;
 
 	/**
 	 * 索引文件可写入索引条目个数
 	 */
-	@Setter
 	private int indexFileItems = 600000;
 
-	@Setter
 	private int indexAppendQueueSize = 50000;
+
+	private int indexFlushInterval = 30000;
 	
 	
 	public StoreConfig(String file) throws IOException {

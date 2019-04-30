@@ -44,7 +44,7 @@ public class LogService extends Service {
 
 	private final FlushCondition flushCondition;
 
-	public LogService(StoreConfig storeConfig, EventBus<StoreEvent> storeEventBus, IndexService indexService) {
+	public LogService(StoreConfig storeConfig, EventBus<StoreEvent> storeEventBus, IndexService indexService) throws IOException {
 		this.storeConfig = storeConfig;
 		this.storeEventBus = storeEventBus;
 		this.indexService = indexService;
@@ -116,6 +116,7 @@ public class LogService extends Service {
 		}
 
 		log.info("Log recovered offset {}", recoverOffset);
+		indexService.persistent();
 		logAppendDir.truncate(recoverOffset);
 	}
 

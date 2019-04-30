@@ -4,31 +4,22 @@ import lombok.extern.slf4j.Slf4j;
 import pers.zyc.piglet.SystemCode;
 import pers.zyc.piglet.SystemException;
 import pers.zyc.tools.utils.BatchFetchQueue;
-import pers.zyc.tools.utils.SystemMillis;
 import pers.zyc.tools.utils.event.EventBus;
-import pers.zyc.tools.utils.lifecycle.Service;
 import pers.zyc.tools.utils.lifecycle.ThreadService;
-import sun.nio.ch.DirectBuffer;
 
 import java.io.File;
-import java.io.IOException;
-import java.io.RandomAccessFile;
-import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.stream.Stream;
-import java.util.zip.Adler32;
 
 /**
  * @author zhangyancheng
  */
 @Slf4j
-public class IndexService extends Service implements Persistently {
-	private static final int CP_DATA_LENGTH = 16 + 4;
-	private static final int CP_NEXT_POS = 1004;
+public class IndexService extends ThreadService implements Persistently {
 
 	/**
 	 * 索引目录
@@ -50,7 +41,8 @@ public class IndexService extends Service implements Persistently {
 	IndexService(StoreConfig storeConfig, EventBus<StoreEvent> storeEventBus) {
 		this.storeConfig = storeConfig;
 		this.storeEventBus = storeEventBus;
-		this.checkpoint = new Checkpoint();
+		this.checkpoint = new Checkpoint(storeConfig.getCheckpointFile());
+		this.logIndexedOffset = checkpoint.getCheckpointOffset();
 		this.indexQueue = new BatchFetchQueue<>(storeConfig.getIndexAppendQueueSize());
 		Optional.ofNullable(storeConfig.getIndexDir().listFiles(File::isDirectory))
 				.filter(topicDirs -> topicDirs.length > 0)
@@ -63,13 +55,34 @@ public class IndexService extends Service implements Persistently {
 	@Override
 	protected void doStart() throws Exception {
 		indexAppender.start();
-		checkpoint.start();
 	}
 
 	@Override
 	protected void doStop() throws Exception {
 		indexAppender.stop();
-		checkpoint.stop();
+		checkpoint.close();
+		super.doStop();
+	}
+
+	@Override
+	protected Runnable getRunnable() {
+		return new ServiceRunnable() {
+
+			@Override
+			protected long getInterval() {
+				return storeConfig.getIndexFlushInterval();
+			}
+
+			@Override
+			protected void execute() throws InterruptedException {
+				try {
+					persistent();
+				} catch (Exception e) {
+					log.error("Index persistent failed", e);
+					storeEventBus.offer(StoreEvent.create(e));
+				}
+			}
+		};
 	}
 
 	@Override
@@ -79,13 +92,14 @@ public class IndexService extends Service implements Persistently {
 
 	@Override
 	public void persistent() {
-		topicIndexMap.values().parallelStream().forEach(topicIndex -> {
-			try {
-				topicIndex.persistent();
-			} catch (IOException e) {
-				storeEventBus.offer(StoreEvent.create(e));
-			}
-		});
+		long offsetBeforePersistent = getLogIndexedOffset();
+
+		if (offsetBeforePersistent > checkpoint.getCheckpointOffset()) {
+			topicIndexMap.values().forEach(TopicIndex::persistent);
+			log.info("Index data is persistent, log offset: {}", offsetBeforePersistent);
+			checkpoint.setCheckpointOffset(offsetBeforePersistent);
+			checkpoint.persistent();
+		}
 	}
 
 	/**
@@ -94,7 +108,14 @@ public class IndexService extends Service implements Persistently {
 	 * @return 最小的未正确刷盘的索引项对应的日志偏移量
 	 */
 	public long recover() {
-		long offset = topicIndexMap.values().parallelStream().mapToLong(TopicIndex::recover).min().orElse(-1);
+		long offset = topicIndexMap.values()
+				.stream()
+				.map(TopicIndex::getAllIndexQueue)
+				.flatMap(Arrays::stream)
+				.parallel()
+				.mapToLong(IndexQueue::recover)
+				.min()
+				.orElse(-1);
 		return offset > 0 && offset < logIndexedOffset ? offset : logIndexedOffset;
 	}
 
@@ -130,9 +151,10 @@ public class IndexService extends Service implements Persistently {
 		IndexQueue queue = indexContext.getQueue();
 		if (indexContext.isRecover()) {
 			if (queue.getOffset() > indexContext.getIndexOffset()) {
+				// 索引已经持久化
+				logIndexedOffset = indexContext.getLogOffset() + indexContext.getMessageSize();// 记录已索引的日志位置
 				return;
 			}
-			assert queue.getOffset() == indexContext.getIndexOffset();
 			queue.updateOffset();
 		}
 		queue.append(indexContext);
@@ -160,130 +182,10 @@ public class IndexService extends Service implements Persistently {
 					try {
 						contexts.forEach(IndexService.this::index);
 					} catch (Exception e) {
-						storeEventBus.add(StoreEvent.create(e));
+						storeEventBus.offer(StoreEvent.create(e));
 					}
 				}
 			};
 		}
-	}
-
-	private class Checkpoint extends ThreadService {
-
-		private ByteBuffer dataBuffer;
-
-		private FileChannel fileChannel;
-
-		private long timestamp;
-
-		@Override
-		protected void doStart() throws Exception {
-			fileChannel = new RandomAccessFile(storeConfig.getCheckpointFile(), "rw").getChannel();
-			dataBuffer = ByteBuffer.allocateDirect(CP_DATA_LENGTH);
-
-			long size = fileChannel.size();
-			if (size >= CP_DATA_LENGTH) {
-				if (!validFrom(0)) {
-					if (size >= CP_NEXT_POS + CP_DATA_LENGTH) {
-						if (!validFrom(CP_NEXT_POS)) {
-							throw new SystemException(SystemCode.CHECKSUM_WRONG);
-						}
-					} else {
-						throw new SystemException(SystemCode.CHECKSUM_WRONG);
-					}
-				}
-			}
-		}
-
-		@Override
-		protected void doStop() throws Exception {
-			super.doStop();
-			((DirectBuffer) dataBuffer).cleaner().clean();
-			fileChannel.close();
-		}
-
-		@Override
-		protected Runnable getRunnable() {
-			return new ServiceRunnable() {
-
-				@Override
-				protected long getInterval() {
-					// 定时持久化队列文件，且记录写盘位置
-					return 1000 * 30;
-				}
-
-				@Override
-				protected void execute() throws InterruptedException {
-					long offsetBeforePersistent = getLogIndexedOffset();
-
-					persistent();
-
-					log.info("Index data is persistent, log offset: " + offsetBeforePersistent);
-					if (offsetBeforePersistent > 0) {
-						persistentCheckpoint(offsetBeforePersistent);
-					}
-				}
-			};
-		}
-
-		private void persistentCheckpoint(long logIndexedOffset) throws InterruptedException {
-			dataBuffer.clear();
-
-			timestamp = SystemMillis.current();
-			dataBuffer.putLong(logIndexedOffset);
-			dataBuffer.putLong(timestamp);
-			dataBuffer.flip();
-			int checksum = getChecksum(dataBuffer);
-			dataBuffer.limit(CP_DATA_LENGTH);
-			dataBuffer.putInt(checksum);
-			// 双写，避免写入异常时仍有一份数据不被脏写
-			try {
-				writeData(0);
-				writeData(CP_NEXT_POS);
-				fileChannel.force(false);
-			} catch (IOException e) {
-				log.error("Checkpoint persistent failed: {}", e.getMessage());
-				storeEventBus.add(StoreEvent.create(e));
-			}
-		}
-
-		private boolean validFrom(int position) throws IOException {
-			readData(position);
-
-			dataBuffer.rewind();
-			dataBuffer.limit(16);// 读前16字节
-
-			int checksum = getChecksum(dataBuffer);
-
-			dataBuffer.limit(CP_DATA_LENGTH);// 读最后4字节
-			if (checksum == dataBuffer.getInt()) {
-				dataBuffer.rewind();
-				logIndexedOffset = dataBuffer.getLong();
-				timestamp = dataBuffer.getLong();
-				return true;
-			}
-			return false;
-		}
-
-		private void readData(int position) throws IOException {
-			dataBuffer.clear();
-			fileChannel.position(position);
-			while (dataBuffer.hasRemaining()) {
-				fileChannel.read(dataBuffer);
-			}
-		}
-
-		private void writeData(int position) throws IOException {
-			dataBuffer.rewind();
-			fileChannel.position(position);
-			while (dataBuffer.hasRemaining()) {
-				fileChannel.write(dataBuffer);
-			}
-		}
-	}
-
-	private static int getChecksum(ByteBuffer buffer) {
-		Adler32 checksum = new Adler32();
-		checksum.update(buffer);
-		return (int) checksum.getValue();
 	}
 }
