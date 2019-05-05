@@ -34,12 +34,12 @@ public class StoreTest {
 		DefaultStore store = new DefaultStore(config);
 		store.start();
 
-		store.getIndexService().addTopic("topic_x1", (short) 3);
+		store.getIndexService().addTopic("topic_x1", (short) 1);
 
 
-		Executor executor = Executors.newFixedThreadPool(50);
+		Executor executor = Executors.newFixedThreadPool(1);
 
-		int count = 10000;
+		int count = 1;
 
 		CountDownLatch latch = new CountDownLatch(count);
 		long begin = SystemMillis.current();
@@ -47,12 +47,12 @@ public class StoreTest {
 			executor.execute(() -> {
 				BrokerMessage message = new BrokerMessage();
 				message.setTopic("topic_x1");
-				message.setProducer("producer_x1");
+				message.setProducer("producer_x2");
 
 				LocalDateTime ldt = LocalDateTime.parse("2019-04-03T10:15:30");
-				message.setClientSendTime(ldt.toEpochSecond(ZoneOffset.UTC));
+				message.setClientSendTime(ldt.toInstant(ZoneOffset.UTC).toEpochMilli());
 
-				message.setBody(new byte[1024]);
+				message.setBody(new byte[1024 * 1024 * 5]);
 				message.setClientAddress(IPUtil.toBytes("172.52.49.30"));
 				message.setServerAddress(IPUtil.toBytes("172.52.12.189"));
 

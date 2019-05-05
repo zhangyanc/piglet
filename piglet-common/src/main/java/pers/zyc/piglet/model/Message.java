@@ -3,67 +3,44 @@ package pers.zyc.piglet.model;
 import io.netty.buffer.ByteBuf;
 import lombok.Getter;
 import lombok.Setter;
-import pers.zyc.piglet.ChecksumException;
 import pers.zyc.piglet.LenType;
 import pers.zyc.piglet.Serialization;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
-import java.util.zip.Adler32;
 
 /**
  * @author zhangyancheng
  */
 @Getter
+@Setter
 public class Message {
 	
 	/**
 	 * 主题
 	 */
-	@Setter
 	private String topic;
 
 	/**
 	 * 生产者
 	 */
-	@Setter
 	private String producer;
 
 	/**
 	 * 发送时间
 	 */
-	@Setter
 	private long clientSendTime;
 
 	/**
 	 * 消息体
 	 */
 	private byte[] body;
-
-	/**
-	 * body数据校验和
-	 */
-	private int checksum;
 	
 	/**
 	 * 属性
 	 */
-	@Setter
 	private Map<String, String> properties;
-
-	/**
-	 * 设置消息体
-	 *
-	 * @param body 消息体
-	 */
-	public void setBody(byte[] body) {
-		this.body = Objects.requireNonNull(body);
-		Adler32 adler32 = new Adler32();
-		adler32.update(body);
-		this.checksum = (int) adler32.getValue();
-	}
 
 	/**
 	 * 添加附加属性
@@ -93,7 +70,6 @@ public class Message {
 		Serialization.writeString(buf, producer);
 		buf.writeLong(clientSendTime);
 		Serialization.writeBytes(buf, body);
-		buf.writeInt(checksum);
 		encodeProperties(buf);
 	}
 
@@ -121,10 +97,7 @@ public class Message {
 		topic = Serialization.readString(buf);
 		producer = Serialization.readString(buf);
 		clientSendTime = buf.readLong();
-		setBody(Serialization.readBytes(buf));
-		if (checksum != buf.readInt()) {
-			throw new ChecksumException();
-		}
+		body = Serialization.readBytes(buf);
 		decodeProperties(buf);
 	}
 }

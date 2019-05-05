@@ -3,6 +3,8 @@ package pers.zyc.piglet.model;
 import io.netty.buffer.ByteBuf;
 import lombok.Getter;
 import lombok.Setter;
+import pers.zyc.piglet.ChecksumException;
+import pers.zyc.piglet.ChecksumUtil;
 
 import java.util.Optional;
 
@@ -15,6 +17,7 @@ public class BrokerMessage extends Message {
 
 	public static final int INDEX_OFFSET_WRITE_INDEX = 4 + 1;// 4字节长度 + 1字节队列号
 	public static final int LOG_OFFSET_WRITE_INDEX = INDEX_OFFSET_WRITE_INDEX + 8;// + 8字节索引偏移量长度
+	public static final int STORE_TIME_WRITE_INDEX = 4 + 1 + 8 + 8 + 4 + 4 + 4;
 
 	/**
 	 * 消息大小（字节数）
@@ -51,6 +54,22 @@ public class BrokerMessage extends Message {
 	 */
 	private long receiveTime;
 
+	/**
+	 * 存储时间
+	 */
+	private long storeTime;
+
+	public BrokerMessage() {
+	}
+
+	public BrokerMessage(Message message) {
+		setTopic(message.getTopic());
+		setProducer(message.getProducer());
+		setClientSendTime(message.getClientSendTime());
+		setBody(message.getBody());
+		setProperties(message.getProperties());
+	}
+
 	@Override
 	public void encode(ByteBuf buf) {
 		int begin = buf.writerIndex();
@@ -62,7 +81,8 @@ public class BrokerMessage extends Message {
 		buf.writeBytes(Optional.ofNullable(clientAddress).orElse(new byte[4]));
 		buf.writeBytes(Optional.ofNullable(serverAddress).orElse(new byte[4]));
 		buf.writeInt((int) (receiveTime - getClientSendTime()));
-
+		buf.writeInt(0);// 存储时间单独写入
+		buf.writeInt(ChecksumUtil.calc(getBody()));
 		super.encode(buf);
 
 		int end = buf.writerIndex();
@@ -82,10 +102,15 @@ public class BrokerMessage extends Message {
 		clientAddress = serverAddress = new byte[4];
 		buf.readBytes(clientAddress);
 		buf.readBytes(serverAddress);
-		int diff = buf.readInt();
-
+		int receiveTimeDiff = buf.readInt();
+		int storeTimeDiff = buf.readInt();
+		int checksum = buf.readInt();
 		super.decode(buf);
 
-		receiveTime = getClientSendTime() + diff;
+		if (checksum != ChecksumUtil.calc(getBody())) {
+			throw new ChecksumException();
+		}
+		receiveTime = getClientSendTime() + receiveTimeDiff;
+		storeTime = getClientSendTime() + storeTimeDiff;
 	}
 }

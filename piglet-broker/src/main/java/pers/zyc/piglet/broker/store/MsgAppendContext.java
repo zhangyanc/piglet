@@ -23,14 +23,4 @@ class MsgAppendContext {
 		this.flush = flush;
 		this.latch = latch;
 	}
-
-	void setIndexOffset(long indexOffset) {
-		message.setIndexOffset(indexOffset);
-		buf.setLong(BrokerMessage.INDEX_OFFSET_WRITE_INDEX, indexOffset);
-	}
-
-	void setLogOffset(long logOffset) {
-		message.setLogOffset(logOffset);
-		buf.setLong(BrokerMessage.LOG_OFFSET_WRITE_INDEX, logOffset);
-	}
 }

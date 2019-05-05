@@ -97,7 +97,7 @@ public class LogService extends Service {
 						// 数据末尾，一定是最后一个文件
 						break file;
 					} else {
-						if (blockData.remaining() < nextMessageSize) {
+						if (blockData.remaining() < nextMessageSize - 4) {
 							// 块数据不足错误
 							break;
 						}
@@ -133,7 +133,6 @@ public class LogService extends Service {
 	void writeMessage(BrokerMessage message) throws Exception {
 		TopicIndex topicIndex = indexService.getTopicIndex(message.getTopic());
 		message.setQueueNum(topicIndex.randomQueue());
-		message.setReceiveTime(SystemMillis.current());
 		ByteBuf byteBuf = byteBufPool.borrow();
 		try {
 			message.encode(byteBuf);
@@ -173,7 +172,7 @@ public class LogService extends Service {
 						try {
 							appendMessage(appendContext);
 						} catch (IOException e) {
-							e.printStackTrace();
+							storeEventBus.add(StoreEvent.create(e));
 						}
 					}
 				}
@@ -182,14 +181,9 @@ public class LogService extends Service {
 	}
 
 	private void appendMessage(MsgAppendContext ctx) throws IOException {
-		IndexQueue queue = indexService.getIndexQueue(ctx.message.getTopic(), ctx.message.getQueueNum());
-
-		long indexOffset = queue.getOffset();
-		ctx.setIndexOffset(indexOffset);
-
 		// 在最后一个日志文件追加写入
-		AppendFile lastFile = logAppendDir.getLastFile();
-		int writeRemain = lastFile.remaining();
+		AppendFile logFile = logAppendDir.getLastFile();
+		int writeRemain = logFile.remaining();
 		if (writeRemain < ctx.message.getSize()) {
 			ByteBuffer blankBuffer = ByteBuffer.allocate(writeRemain);
 			blankBuffer.limit(writeRemain);
@@ -198,14 +192,28 @@ public class LogService extends Service {
 				blankBuffer.rewind();
 			}
 
-			lastFile.append(blankBuffer);
-			lastFile.persistent();
-			lastFile = logAppendDir.createNewFile();
+			logFile.append(blankBuffer);
+			logFile.persistent();
+			logFile = logAppendDir.createNewFile();
 		}
-		long logOffset = lastFile.getId() + lastFile.getWritePosition();
-		ctx.setLogOffset(logOffset);
+		// 计算并写入日志偏移量
+		long logOffset = logFile.getId() + logFile.getWritePosition();
+		ctx.message.setLogOffset(logOffset);
+		ctx.buf.setLong(BrokerMessage.LOG_OFFSET_WRITE_INDEX, logOffset);
 
-		lastFile.append(ctx.buf.nioBuffer());
+		// 计算并写入索引偏移量
+		IndexQueue queue = indexService.getIndexQueue(ctx.message.getTopic(), ctx.message.getQueueNum());
+		long indexOffset = queue.getOffset();
+		ctx.message.setIndexOffset(indexOffset);
+		ctx.buf.setLong(BrokerMessage.INDEX_OFFSET_WRITE_INDEX, indexOffset);
+
+		// 存储前写入时间
+		long storeTime = SystemMillis.current();
+		ctx.message.setStoreTime(storeTime);
+		ctx.buf.setInt(BrokerMessage.STORE_TIME_WRITE_INDEX, (int) (storeTime - ctx.message.getClientSendTime()));
+
+		logFile.append(ctx.buf.nioBuffer());
+
 		ctx.latch.countDown();
 
 		if (ctx.flush) {
