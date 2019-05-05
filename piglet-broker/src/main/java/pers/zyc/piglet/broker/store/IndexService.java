@@ -65,6 +65,11 @@ public class IndexService extends ThreadService implements Persistently {
 	}
 
 	@Override
+	public String getName() {
+		return "Message indexer";
+	}
+
+	@Override
 	protected Runnable getRunnable() {
 		return new ServiceRunnable() {
 
@@ -182,7 +187,7 @@ public class IndexService extends ThreadService implements Persistently {
 					try {
 						contexts.forEach(IndexService.this::index);
 					} catch (Exception e) {
-						storeEventBus.offer(StoreEvent.create(e));
+						storeEventBus.add(StoreEvent.create(e));
 					}
 				}
 			};
