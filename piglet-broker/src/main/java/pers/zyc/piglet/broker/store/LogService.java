@@ -14,7 +14,6 @@ import pers.zyc.tools.utils.event.EventBus;
 import pers.zyc.tools.utils.lifecycle.Service;
 import pers.zyc.tools.utils.lifecycle.ThreadService;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -44,7 +43,7 @@ public class LogService extends Service {
 
 	private final FlushCondition flushCondition;
 
-	public LogService(StoreConfig storeConfig, EventBus<StoreEvent> storeEventBus, IndexService indexService) throws IOException {
+	LogService(StoreConfig storeConfig, EventBus<StoreEvent> storeEventBus, IndexService indexService) {
 		this.storeConfig = storeConfig;
 		this.storeEventBus = storeEventBus;
 		this.indexService = indexService;
@@ -74,7 +73,7 @@ public class LogService extends Service {
 		return message;
 	}
 
-	void recover(long recoverOffset) throws IOException {
+	void recover(long recoverOffset) {
 		log.info("Log recover from {}", recoverOffset);
 		AppendFile[] appendFiles = logAppendDir.getAllFiles();
 		files:for (AppendFile file : appendFiles) {
@@ -171,7 +170,7 @@ public class LogService extends Service {
 					for (MsgAppendContext appendContext : contexts) {
 						try {
 							appendMessage(appendContext);
-						} catch (IOException e) {
+						} catch (Exception e) {
 							storeEventBus.add(StoreEvent.create(e));
 						}
 					}
@@ -180,7 +179,7 @@ public class LogService extends Service {
 		}
 	}
 
-	private void appendMessage(MsgAppendContext ctx) throws IOException {
+	private void appendMessage(MsgAppendContext ctx) {
 		// 在最后一个日志文件追加写入
 		AppendFile logFile = logAppendDir.getLastFile();
 		int writeRemain = logFile.remaining();
@@ -246,7 +245,7 @@ public class LogService extends Service {
 					try {
 						logAppendDir.getLastFile().persistent();
 						contexts.forEach(ctx -> ctx.latch.countDown());
-					} catch (IOException e) {
+					} catch (Exception e) {
 						storeEventBus.add(StoreEvent.create(e));
 					}
 				}

@@ -6,7 +6,6 @@ import pers.zyc.tools.utils.event.EventBus;
 import pers.zyc.tools.utils.event.EventListener;
 import pers.zyc.tools.utils.lifecycle.Service;
 
-import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.channels.FileLock;
 
@@ -36,7 +35,7 @@ public class DefaultStore extends Service implements Store {
 		fileLock = lockRaf.getChannel().tryLock();
 		if (fileLock == null) {
 			lockRaf.close();
-			throw new IOException("File lock failed, it's likely locked by another progress");
+			throw new IllegalStateException("File lock failed, it's likely locked by another progress");
 		}
 	}
 	
@@ -74,7 +73,7 @@ public class DefaultStore extends Service implements Store {
 		return config;
 	}
 
-	private void recover() throws IOException {
+	private void recover() {
 		long recoverOffset = indexService.recover();
 		logService.recover(recoverOffset);
 	}

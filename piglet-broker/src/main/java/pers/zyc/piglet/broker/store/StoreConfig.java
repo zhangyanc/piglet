@@ -5,6 +5,7 @@ import lombok.Setter;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 
 /**
  * @author zhangyancheng
@@ -62,47 +63,51 @@ public class StoreConfig {
 	private int indexFlushInterval = 30000;
 	
 	
-	public StoreConfig(String file) throws IOException {
+	public StoreConfig(String file) {
 		this(new File(file));
 	}
 	
-	public StoreConfig(File dataDir) throws IOException {
+	public StoreConfig(File dataDir) {
 		if (dataDir.exists()) {
 			if (!dataDir.isDirectory()) {
-				throw new IOException("File isn't a directory, file:" + dataDir);
+				throw new IllegalStateException("File isn't a directory, file:" + dataDir);
 			}
 		} else {
 			if (!dataDir.mkdirs() && !dataDir.exists()) {
-				throw new IOException("Create directory failed, file: " + dataDir);
+				throw new IllegalStateException("Create directory failed, file: " + dataDir);
 			}
 		}
 		if (!dataDir.canWrite()) {
-			throw new IOException("File can't write, file: " + dataDir);
+			throw new IllegalStateException("File can't write, file: " + dataDir);
 		}
 		if (!dataDir.canRead()) {
-			throw new IOException("File can't read, file: " + dataDir);
+			throw new IllegalStateException("File can't read, file: " + dataDir);
 		}
 		
 		this.dataDir = dataDir;
 		this.logDir = new File(dataDir, "log/");
 		if (!logDir.exists() && !logDir.mkdir()) {
-			throw new IOException("Create log directory failed, file: " + logDir);
+			throw new IllegalStateException("Create log directory failed, file: " + logDir);
 		}
 		this.indexDir = new File(dataDir, "index/");
 		if (!indexDir.exists() && !indexDir.mkdir()) {
-			throw new IOException("Create queue directory failed, file: " + indexDir);
+			throw new IllegalStateException("Create queue directory failed, file: " + indexDir);
 		}
 		this.checkpointFile = new File(indexDir, "checkpoint");
-		if (!checkpointFile.exists() && !checkpointFile.createNewFile()) {
-			throw new IOException("Create checkpoint file failed, file: " + checkpointFile);
-		}
 		this.consumeOffsetFile = new File(dataDir, "consume-offset");
-		if (!consumeOffsetFile.exists() && !consumeOffsetFile.createNewFile()) {
-			throw new IOException("Create consume offset file failed, file: " + consumeOffsetFile);
-		}
 		this.lockFile = new File(dataDir, "lock");
-		if (!lockFile.exists() && !lockFile.createNewFile() && !lockFile.exists()) {
-			throw new IOException("Create lock file failed, file: " + lockFile);
+		try {
+			if (!checkpointFile.exists() && !checkpointFile.createNewFile()) {
+				throw new IllegalStateException("Create checkpoint file failed, file: " + checkpointFile);
+			}
+			if (!consumeOffsetFile.exists() && !consumeOffsetFile.createNewFile()) {
+				throw new IllegalStateException("Create consume offset file failed, file: " + consumeOffsetFile);
+			}
+			if (!lockFile.exists() && !lockFile.createNewFile() && !lockFile.exists()) {
+				throw new IllegalStateException("Create lock file failed, file: " + lockFile);
+			}
+		} catch (IOException e) {
+			throw new UncheckedIOException(e);
 		}
 	}
 }

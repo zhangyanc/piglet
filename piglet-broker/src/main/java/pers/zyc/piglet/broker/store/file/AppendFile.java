@@ -1,18 +1,13 @@
 package pers.zyc.piglet.broker.store.file;
 
 import lombok.Getter;
+import pers.zyc.piglet.IOExecutor;
 import pers.zyc.piglet.broker.store.Persistently;
-import pers.zyc.tools.utils.Locks;
 import pers.zyc.tools.utils.SystemMillis;
 
-import java.io.Closeable;
-import java.io.File;
-import java.io.IOException;
-import java.io.RandomAccessFile;
+import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * @author zhangyancheng
@@ -76,43 +71,45 @@ public class AppendFile implements Closeable, Persistently {
 	@Getter
 	private int flushPosition;
 
-	private final Lock lock = new ReentrantLock();
-
-	AppendFile(long id, int fileLength, AppendDir directory) throws IOException {
+	AppendFile(long id, int fileLength, AppendDir directory) {
 		this.id = id;
 		this.fileLength = fileLength;
 		this.directory = directory;
 		this.file = new File(directory.getDirectory(), String.valueOf(id));
-		
-		if (!file.exists() && !file.createNewFile()) {
-			throw new IllegalStateException("Create append file failed, file: " + file.getPath());
-		}
-		RandomAccessFile raf = new RandomAccessFile(file, "rw");
-		fileChannel = raf.getChannel();
-		if (raf.length() < HEAD_LENGTH) {
-			// 预申请固定大小
-			raf.setLength(fileLength + HEAD_LENGTH);
-			version = VERSION;
-			createTime = SystemMillis.current();
-			writeHeader();
-		} else {
-			ByteBuffer headerBuffer = readHeader();
-			version = headerBuffer.getShort();
-			createTime = headerBuffer.getLong();
-			// 写入位置设置到末尾, 等待恢复时矫正
-			writePosition = fileLength;
-			flushPosition = fileLength;
+
+		try {
+			if (!file.exists() && !file.createNewFile()) {
+				throw new IllegalStateException("Create append file failed, file: " + file.getPath());
+			}
+			RandomAccessFile raf = new RandomAccessFile(file, "rw");
+			fileChannel = raf.getChannel();
+			if (raf.length() < HEAD_LENGTH) {
+				// 预申请固定大小
+				raf.setLength(fileLength + HEAD_LENGTH);
+				version = VERSION;
+				createTime = SystemMillis.current();
+				writeHeader();
+			} else {
+				ByteBuffer headerBuffer = readHeader();
+				version = headerBuffer.getShort();
+				createTime = headerBuffer.getLong();
+				// 写入位置设置到末尾, 等待恢复时矫正
+				writePosition = fileLength;
+				flushPosition = fileLength;
+			}
+		} catch (IOException e) {
+			throw new UncheckedIOException(e);
 		}
 	}
 	
 	@Override
-	public void close() throws IOException {
-		Locks.execute(lock, fileChannel::close);
+	public void close() {
+		IOExecutor.execute(fileChannel::close);
 	}
 
 	@Override
-	public void persistent() throws IOException {
-		Locks.execute(lock, () -> {
+	public void persistent() {
+		IOExecutor.execute(() -> {
 			fileChannel.force(false);
 			flushPosition = writePosition;
 		});
@@ -126,9 +123,9 @@ public class AppendFile implements Closeable, Persistently {
 	/**
 	 * 写头部数据
 	 *
-	 * @throws IOException io异常
+	 * @throws UncheckedIOException io异常
 	 */
-	private void writeHeader() throws IOException {
+	private void writeHeader() {
 		ByteBuffer buffer = ByteBuffer.allocate(HEAD_LENGTH);
 		buffer.putShort(version);
 		buffer.putLong(createTime);
@@ -141,15 +138,22 @@ public class AppendFile implements Closeable, Persistently {
 	 * 读取头部数据
 	 *
 	 * @return 头部数据
-	 * @throws IOException io异常
+	 * @throws UncheckedIOException io异常
 	 */
-	private ByteBuffer readHeader() throws IOException {
+	private ByteBuffer readHeader() {
 		ByteBuffer buffer = ByteBuffer.allocate(HEAD_LENGTH);
-		while (buffer.hasRemaining()) {
-			fileChannel.read(buffer);
-		}
-		buffer.flip();
+		readData(0, buffer);
 		return buffer;
+	}
+
+	private void readData(int position, ByteBuffer buffer) {
+		IOExecutor.execute(() -> {
+			int pos = position;
+			while (buffer.hasRemaining()) {
+				pos += fileChannel.read(buffer, pos);
+			}
+			buffer.flip();
+		});
 	}
 
 	/**
@@ -167,27 +171,29 @@ public class AppendFile implements Closeable, Persistently {
 	 * 追加数据
 	 *
 	 * @param data 数据
-	 * @throws IOException io异常
+	 * @throws UncheckedIOException io异常
 	 */
-	public void append(ByteBuffer data) throws IOException {
-		long realFileWritePos = fileChannel.position();
+	public void append(ByteBuffer data) {
+		long realFileWritePos = IOExecutor.execute((IOExecutor.IOCallAction<Long>) fileChannel::position);
 		if (writePosition + HEAD_LENGTH != realFileWritePos) {
-			throw new IOException("Incorrect write position: expected " + writePosition + " " +
+			throw new IllegalStateException("Incorrect write position: expected " + writePosition + " " +
 					"actual " + (realFileWritePos - HEAD_LENGTH));
 		}
 		int length = data.remaining();
 		if (writePosition + length > fileLength) {
-			throw new IOException("File is not large enough, required " + length + ", " +
+			throw new IllegalStateException("File is not large enough, required " + length + ", " +
 					"remain " + (fileLength - writePosition));
 		}
 		append0(data);
 		writePosition += length;
 	}
 
-	private void append0(ByteBuffer data) throws IOException {
-		while (data.hasRemaining()) {
-			fileChannel.write(data);
-		}
+	private void append0(ByteBuffer data) {
+		IOExecutor.execute(() -> {
+			while (data.hasRemaining()) {
+				fileChannel.write(data);
+			}
+		});
 	}
 
 	/**
@@ -196,17 +202,17 @@ public class AppendFile implements Closeable, Persistently {
 	 * @param position 起始位置
 	 * @param size 读取数据长度
 	 * @return 数据缓存区
-	 * @throws IOException IO异常
+	 * @throws UncheckedIOException IO异常
+	 * @throws IllegalArgumentException position错误
 	 */
-	public ByteBuffer read(int position, int size) throws IOException {
+	public ByteBuffer read(int position, int size) {
 		if (position < 0 || position > writePosition) {
 			throw new IllegalArgumentException("Read position " + position + " not in [0," + writePosition + ")");
 		}
 		size = Math.min(size, fileLength - position);
 		ByteBuffer result = ByteBuffer.allocate(size);
 		if (size > 0) {
-			fileChannel.read(result, position + HEAD_LENGTH);
-			result.flip();
+			readData(position + HEAD_LENGTH, result);
 		}
 		return result;
 	}
@@ -217,9 +223,9 @@ public class AppendFile implements Closeable, Persistently {
 	 * @param offset 偏移量
 	 * @param size 读取数据长度
 	 * @return 数据缓存区
-	 * @throws IOException IO异常
+	 * @throws UncheckedIOException IO异常
 	 */
-	public ByteBuffer read(long offset, int size) throws IOException {
+	public ByteBuffer read(long offset, int size) {
 		if (offset < id || offset > id + fileLength) {
 			throw new IllegalArgumentException("Read offset " + offset + " invalid for " + this);
 		}
@@ -230,13 +236,14 @@ public class AppendFile implements Closeable, Persistently {
 	 * 根据恢复出的最后写入位置截断文件（矫正writePosition）
 	 *
 	 * @param truncateOffset 恢复的位置
+	 * @throws UncheckedIOException IO异常
 	 */
-	public void truncate(long truncateOffset) throws IOException {
+	public void truncate(long truncateOffset) {
 		if (truncateOffset < id || truncateOffset > id + fileLength) {
 			throw new IllegalArgumentException("Truncate offset " + truncateOffset + " invalid for " + this);
 		}
 		int pos = (int) (truncateOffset % fileLength);
 		flushPosition = writePosition = pos;
-		fileChannel.position(pos + HEAD_LENGTH);
+		IOExecutor.execute(() -> fileChannel.position(pos + HEAD_LENGTH));
 	}
 }

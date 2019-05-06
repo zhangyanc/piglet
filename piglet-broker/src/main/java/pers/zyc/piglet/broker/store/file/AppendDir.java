@@ -7,7 +7,6 @@ import pers.zyc.piglet.SystemException;
 
 import java.io.Closeable;
 import java.io.File;
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.TreeMap;
 import java.util.regex.Pattern;
@@ -34,7 +33,7 @@ public class AppendDir implements Closeable {
 	 */
 	private final TreeMap<Long, AppendFile> appendFileMap = new TreeMap<>();
 	
-	public AppendDir(File directory, int fileLength) throws IOException {
+	public AppendDir(File directory, int fileLength) {
 		this.directory = directory;
 		this.fileLength = fileLength;
 		if (!directory.exists() && !directory.mkdir()) {
@@ -61,17 +60,10 @@ public class AppendDir implements Closeable {
 
 	@Override
 	public void close() {
-		appendFileMap.values().forEach(this::closeFile);
+		appendFileMap.values().forEach(AppendFile::close);
 		appendFileMap.clear();
 	}
 
-	private void closeFile(AppendFile appendFile) {
-		try {
-			appendFile.close();
-		} catch (IOException e) {
-			log.warn("Append file close error: {}, file: {}", e.getMessage(), appendFile.getFile());
-		}
-	}
 
 	/**
 	 * @return 目下所有的顺序写文件
@@ -88,7 +80,7 @@ public class AppendDir implements Closeable {
 	 * @param fileId 文件id
 	 * @return 新创建的文件
 	 */
-	private AppendFile createFile(long fileId) throws IOException {
+	private AppendFile createFile(long fileId) {
 		AppendFile af = new AppendFile(fileId, fileLength, this);
 		appendFileMap.put(fileId, af);
 		return af;
@@ -99,14 +91,14 @@ public class AppendDir implements Closeable {
 	 *
 	 * @return 新创建的文件
 	 */
-	public AppendFile createNewFile() throws IOException {
+	public AppendFile createNewFile() {
 		return createFile(appendFileMap.isEmpty() ? 0 : appendFileMap.lastKey() + fileLength);
 	}
 
 	/**
 	 * @return 获取最后一个文件
 	 */
-	public AppendFile getLastFile() throws IOException {
+	public AppendFile getLastFile() {
 		if (appendFileMap.isEmpty()) {
 			return createFile(0);
 		}
@@ -118,7 +110,7 @@ public class AppendDir implements Closeable {
 	 *
 	 * @param offset 截断位置
 	 */
-	public void truncate(long offset) throws IOException {
+	public void truncate(long offset) {
 		for (AppendFile file : appendFileMap.values()) {
 			if (file.getMaxOffset() > offset) {
 				offset = file.getId() >= offset ? file.getId() : offset;

@@ -2,15 +2,13 @@ package pers.zyc.piglet.broker.store;
 
 import lombok.Getter;
 import lombok.Setter;
+import pers.zyc.piglet.IOExecutor;
 import pers.zyc.piglet.SystemCode;
 import pers.zyc.piglet.SystemException;
 import pers.zyc.tools.utils.SystemMillis;
 import sun.nio.ch.DirectBuffer;
 
-import java.io.Closeable;
-import java.io.File;
-import java.io.IOException;
-import java.io.RandomAccessFile;
+import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.zip.Adler32;
@@ -56,18 +54,14 @@ class Checkpoint implements Closeable, Persistently {
 				}
 			}
 		} catch (IOException e) {
-			close();
-			throw new SystemException(SystemCode.IO_EXCEPTION);
+			throw new UncheckedIOException(e);
 		}
 	}
 
 	@Override
 	public void close() {
 		((DirectBuffer) dataBuffer).cleaner().clean();
-		try {
-			fileChannel.close();
-		} catch (IOException ignored) {
-		}
+		IOExecutor.execute(fileChannel::close);
 	}
 
 	@Override
@@ -81,17 +75,15 @@ class Checkpoint implements Closeable, Persistently {
 		int checksum = getChecksum(dataBuffer);
 		dataBuffer.limit(CP_DATA_LENGTH);
 		dataBuffer.putInt(checksum);
-		try {
+		IOExecutor.execute(() -> {
 			// 双写，避免写入异常时仍有一份数据不被脏写
 			writeData(0);
 			writeData(CP_NEXT_POS);
 			fileChannel.force(false);
-		} catch (IOException e) {
-			throw new SystemException(SystemCode.IO_EXCEPTION);
-		}
+		});
 	}
 
-	private boolean validFrom(int position) throws IOException {
+	private boolean validFrom(int position) {
 		readData(position);
 
 		dataBuffer.rewind();
@@ -109,20 +101,24 @@ class Checkpoint implements Closeable, Persistently {
 		return false;
 	}
 
-	private void readData(int position) throws IOException {
+	private void readData(int position) {
 		dataBuffer.clear();
-		fileChannel.position(position);
-		while (dataBuffer.hasRemaining()) {
-			fileChannel.read(dataBuffer);
-		}
+		IOExecutor.execute(() -> {
+			fileChannel.position(position);
+			while (dataBuffer.hasRemaining()) {
+				fileChannel.read(dataBuffer);
+			}
+		});
 	}
 
-	private void writeData(int position) throws IOException {
+	private void writeData(int position) {
 		dataBuffer.rewind();
-		fileChannel.position(position);
-		while (dataBuffer.hasRemaining()) {
-			fileChannel.write(dataBuffer);
-		}
+		IOExecutor.execute(() -> {
+			fileChannel.position(position);
+			while (dataBuffer.hasRemaining()) {
+				fileChannel.write(dataBuffer);
+			}
+		});
 	}
 
 	private static int getChecksum(ByteBuffer buffer) {

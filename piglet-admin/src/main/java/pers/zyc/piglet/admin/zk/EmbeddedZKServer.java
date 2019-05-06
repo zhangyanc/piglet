@@ -6,11 +6,11 @@ import org.apache.zookeeper.server.ServerConfig;
 import org.apache.zookeeper.server.ZooKeeperServerMain;
 import org.apache.zookeeper.server.quorum.QuorumPeerConfig;
 import org.apache.zookeeper.server.quorum.QuorumPeerMain;
+import pers.zyc.piglet.IOExecutor;
 import pers.zyc.tools.utils.IPUtil;
 import pers.zyc.tools.utils.lifecycle.Service;
 
 import java.io.File;
-import java.io.IOException;
 import java.io.InputStream;
 import java.io.RandomAccessFile;
 import java.net.SocketException;
@@ -46,7 +46,7 @@ public class EmbeddedZKServer extends Service {
 		if (myId > 0) {
 			File dataDir = new File(properties.getProperty("dataDir", DEFAULT_DATA_DIR));
 			if (!dataDir.exists() && !dataDir.mkdirs()) {
-				throw new IOException("Create dataDir failed, file: " + dataDir);
+				throw new IllegalStateException("Create dataDir failed, file: " + dataDir);
 			}
 			try (RandomAccessFile raf = new RandomAccessFile(new File(dataDir, "myId"), "rw")) {
 				raf.setLength(0);// 清除原数据
@@ -82,7 +82,7 @@ public class EmbeddedZKServer extends Service {
 	protected void doStart() throws Exception {
 		starter = new Thread(() -> {
 			startPurgeMgr(config);
-			try {
+			IOExecutor.execute(() -> {
 				if (myId > 0) {
 					new QuorumPeerMain().runFromConfig(config);
 				} else {
@@ -90,9 +90,7 @@ public class EmbeddedZKServer extends Service {
 					serverConfig.readFrom(config);
 					new ZooKeeperServerMain().runFromConfig(serverConfig);
 				}
-			} catch (IOException e) {
-				log.error("Embedded zk server start failed, myId = " + myId, e);
-			}
+			});
 		});
 		starter.setName("Embedded ZK Starter");
 		starter.start();

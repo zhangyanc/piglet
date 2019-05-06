@@ -14,7 +14,6 @@ import pers.zyc.tools.zkclient.NodeEventWatcher;
 import pers.zyc.tools.zkclient.ZKClient;
 import pers.zyc.tools.zkclient.listener.DataEventListener;
 
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -72,14 +71,10 @@ public class ClusterManager extends Service implements EventSource<ClusterEvent>
 	
 	@Override
 	public void onDataChanged(String path, Stat stat, byte[] data) {
-		try {
-			if (path.equals(clusterConfig.getBrokerPath())) {
-				updateBroker(data);
-			} else if (path.equals(clusterConfig.getTopicPath())) {
-				updateTopic(data);
-			}
-		} catch (Exception e) {
-			log.error("Node data parse error, path: " + path, e);
+		if (path.equals(clusterConfig.getBrokerPath())) {
+			updateBroker(data);
+		} else if (path.equals(clusterConfig.getTopicPath())) {
+			updateTopic(data);
 		}
 	}
 	
@@ -92,9 +87,8 @@ public class ClusterManager extends Service implements EventSource<ClusterEvent>
 	 * 更新Broker节点数据
 	 *
 	 * @param data broker节点数据
-	 * @throws IOException json数据转换异常
 	 */
-	private void updateBroker(byte[] data) throws IOException {
+	private void updateBroker(byte[] data) {
 		List<Broker> brokerList = JSONUtil.parseObject(new String(data, StandardCharsets.UTF_8),
 				new TypeReference<List<Broker>>(){});
 		
@@ -112,9 +106,8 @@ public class ClusterManager extends Service implements EventSource<ClusterEvent>
 	 * 更新主题节点数据
 	 *
 	 * @param data 主题节点数据
-	 * @throws IOException json数据转换异常
 	 */
-	private void updateTopic(byte[] data) throws IOException {
+	private void updateTopic(byte[] data) {
 		List<Topic> topicList = JSONUtil.parseObject(new String(data, StandardCharsets.UTF_8),
 				new TypeReference<List<Topic>>() {});
 		

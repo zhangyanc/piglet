@@ -154,16 +154,17 @@ public class IndexService extends ThreadService implements Persistently {
 
 	public void index(IndexContext indexContext) {
 		IndexQueue queue = indexContext.getQueue();
+		long indexedOffset = indexContext.getLogOffset() + indexContext.getMessageSize();
 		if (indexContext.isRecover()) {
 			if (queue.getOffset() > indexContext.getIndexOffset()) {
 				// 索引已经持久化
-				logIndexedOffset = indexContext.getLogOffset() + indexContext.getMessageSize();// 记录已索引的日志位置
+				logIndexedOffset = indexedOffset;// 记录已索引的日志位置
 				return;
 			}
 			queue.updateOffset();
 		}
 		queue.append(indexContext);
-		logIndexedOffset = indexContext.getLogOffset() + indexContext.getMessageSize();// 记录已索引的日志位置
+		logIndexedOffset = indexedOffset;// 记录已索引的日志位置
 	}
 
 	public long getLogIndexedOffset() {

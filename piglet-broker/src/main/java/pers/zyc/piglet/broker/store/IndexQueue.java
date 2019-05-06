@@ -9,7 +9,6 @@ import sun.nio.ch.DirectBuffer;
 
 import java.io.Closeable;
 import java.io.File;
-import java.io.IOException;
 import java.nio.ByteBuffer;
 
 /**
@@ -55,11 +54,7 @@ public class IndexQueue implements Persistently, Closeable{
 		if (!directory.exists() && !directory.mkdir()) {
 			throw new IllegalStateException("Create append directory failed, directory: " + directory);
 		}
-		try {
-			appendDir = new AppendDir(directory, indexFileItems * IndexItem.LENGTH);
-		} catch (IOException e) {
-			throw new SystemException(SystemCode.IO_EXCEPTION);
-		}
+		appendDir = new AppendDir(directory, indexFileItems * IndexItem.LENGTH);
 		itemBuffer = ByteBuffer.allocateDirect(IndexItem.LENGTH);
 	}
 
@@ -77,11 +72,7 @@ public class IndexQueue implements Persistently, Closeable{
 	@Override
 	public void persistent() {
 		// 因为切换文件时上一个文件已经持久化，因此只需要持久化最后一个文件
-		try {
-			appendDir.getLastFile().persistent();
-		} catch (IOException e) {
-			throw new SystemException(SystemCode.IO_EXCEPTION);
-		}
+		appendDir.getLastFile().persistent();
 	}
 
 	boolean delete() {
@@ -95,35 +86,31 @@ public class IndexQueue implements Persistently, Closeable{
 	 * @return 当前队列未正确刷盘的索引项的日志偏移量
 	 */
 	public long recover() {
-		try {
-			// 因为切换文件时上一个文件已经刷盘，因此只需要恢复最后一个文件
-			AppendFile lastFile = appendDir.getLastFile();
-			offset = lastFile.getId();
-			int splits = 10;
-			int blockSize = lastFile.getFileLength() / splits;
-			long logOffset = -1;
-			int readPosition = 0;
-			out:while (splits-- > 0) {
-				ByteBuffer block = lastFile.read(readPosition, blockSize);
-				readPosition += blockSize;
-				do {
-					IndexItem indexItem = new IndexItem();
-					if (indexItem.decodeAndCheck(block)) {
-						if (indexItem.isBlank()) {
-							// 到达末尾空白
-							logOffset = -1;
-						}
-						break out;
+		// 因为切换文件时上一个文件已经刷盘，因此只需要恢复最后一个文件
+		AppendFile lastFile = appendDir.getLastFile();
+		offset = lastFile.getId();
+		int splits = 10;
+		int blockSize = lastFile.getFileLength() / splits;
+		long logOffset = -1;
+		int readPosition = 0;
+		out:while (splits-- > 0) {
+			ByteBuffer block = lastFile.read(readPosition, blockSize);
+			readPosition += blockSize;
+			do {
+				IndexItem indexItem = new IndexItem();
+				if (indexItem.decodeAndCheck(block)) {
+					if (indexItem.isBlank()) {
+						// 到达末尾空白
+						logOffset = -1;
 					}
-					updateOffset();
-					logOffset = indexItem.getLogOffset();// 最后一条成功刷盘的日志偏移量
-				} while (block.hasRemaining());
-			}
-			lastFile.truncate(offset);
-			return logOffset;
-		} catch (IOException e) {
-			throw new SystemException(SystemCode.IO_EXCEPTION, e);
+					break out;
+				}
+				updateOffset();
+				logOffset = indexItem.getLogOffset();// 最后一条成功刷盘的日志偏移量
+			} while (block.hasRemaining());
 		}
+		lastFile.truncate(offset);
+		return logOffset;
 	}
 
 	public void updateOffset() {
@@ -134,21 +121,18 @@ public class IndexQueue implements Persistently, Closeable{
 		itemBuffer.clear();
 		indexItem.encode(itemBuffer);
 		itemBuffer.flip();
-		try {
-			AppendFile lastFile = appendDir.getLastFile();
-			if (lastFile.remaining() < IndexItem.LENGTH) {
-				// 切换文件时需要将上一个文件刷盘
-				lastFile.persistent();
-				lastFile = appendDir.createNewFile();
-			}
-			if (lastFile.getWritePosition() != indexItem.getIndexOffset() - lastFile.getId()) {
-				throw new SystemException(SystemCode.STORE_WRONG_OFFSET.getCode(),
-						"Wrong index queue offset: " + indexItem.getIndexOffset() +
-								", writePos: " + lastFile.getWritePosition() + ", afId: " + lastFile.getId());
-			}
-			lastFile.append(itemBuffer);
-		} catch (IOException e) {
-			throw new SystemException(SystemCode.IO_EXCEPTION, e);
+
+		AppendFile lastFile = appendDir.getLastFile();
+		if (lastFile.remaining() < IndexItem.LENGTH) {
+			// 切换文件时需要将上一个文件刷盘
+			lastFile.persistent();
+			lastFile = appendDir.createNewFile();
 		}
+		if (lastFile.getWritePosition() != indexItem.getIndexOffset() - lastFile.getId()) {
+			throw new SystemException(SystemCode.STORE_WRONG_OFFSET.getCode(),
+					"Wrong index queue offset: " + indexItem.getIndexOffset() +
+							", writePos: " + lastFile.getWritePosition() + ", afId: " + lastFile.getId());
+		}
+		lastFile.append(itemBuffer);
 	}
 }
