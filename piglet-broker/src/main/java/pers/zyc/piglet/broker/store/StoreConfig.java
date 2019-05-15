@@ -2,10 +2,9 @@ package pers.zyc.piglet.broker.store;
 
 import lombok.Getter;
 import lombok.Setter;
+import pers.zyc.piglet.IOExecutor;
 
 import java.io.File;
-import java.io.IOException;
-import java.io.UncheckedIOException;
 
 /**
  * @author zhangyancheng
@@ -13,7 +12,11 @@ import java.io.UncheckedIOException;
 @Getter
 @Setter
 public class StoreConfig {
-	
+
+	public static final int LOG_RECOVER_READ_BLOCK_SIZE = 1024 * 1024 * 5;
+
+	public static final int INDEX_RECOVER_READ_SPLITS = 10;
+
 	/**
 	 * 数据文件目录
 	 */
@@ -53,6 +56,10 @@ public class StoreConfig {
 
 	private int msgCommitQueueSize = 50000;
 
+	private int appendEnqueueTimeout = 100;
+
+	private int commitEnqueueTimeout = 100;
+
 	/**
 	 * 索引文件可写入索引条目个数
 	 */
@@ -61,6 +68,10 @@ public class StoreConfig {
 	private int indexAppendQueueSize = 50000;
 
 	private int indexFlushInterval = 30000;
+
+	private int indexEnqueueTimeout = 100;
+
+	private int storeMsgTimeout = 3000;
 	
 	
 	public StoreConfig(String file) {
@@ -96,7 +107,7 @@ public class StoreConfig {
 		this.checkpointFile = new File(indexDir, "checkpoint");
 		this.consumeOffsetFile = new File(dataDir, "consume-offset");
 		this.lockFile = new File(dataDir, "lock");
-		try {
+		IOExecutor.execute(() -> {
 			if (!checkpointFile.exists() && !checkpointFile.createNewFile()) {
 				throw new IllegalStateException("Create checkpoint file failed, file: " + checkpointFile);
 			}
@@ -106,8 +117,6 @@ public class StoreConfig {
 			if (!lockFile.exists() && !lockFile.createNewFile() && !lockFile.exists()) {
 				throw new IllegalStateException("Create lock file failed, file: " + lockFile);
 			}
-		} catch (IOException e) {
-			throw new UncheckedIOException(e);
-		}
+		});
 	}
 }

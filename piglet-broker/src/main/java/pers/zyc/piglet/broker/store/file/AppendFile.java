@@ -2,7 +2,7 @@ package pers.zyc.piglet.broker.store.file;
 
 import lombok.Getter;
 import pers.zyc.piglet.IOExecutor;
-import pers.zyc.piglet.broker.store.Persistently;
+import pers.zyc.piglet.broker.store.MapFile;
 import pers.zyc.tools.utils.SystemMillis;
 
 import java.io.*;
@@ -12,13 +12,15 @@ import java.nio.channels.FileChannel;
 /**
  * @author zhangyancheng
  */
-public class AppendFile implements Closeable, Persistently {
+public class AppendFile implements Closeable, MapFile {
 	private static final short VERSION = 1;
 
 	/**
 	 * 头部长度（2字节版本号，8字节创建时间戳，54字节留白）
 	 */
 	final static short HEAD_LENGTH = 2 + 8 + 54;
+
+	private final static byte[] BLANK_BYTES = new byte[54];
 
 	/**
 	 * 文件id，就是文件名，也是该文件在顺序写目录的起始偏移量
@@ -108,7 +110,7 @@ public class AppendFile implements Closeable, Persistently {
 	}
 
 	@Override
-	public void persistent() {
+	public void flush() {
 		IOExecutor.execute(() -> {
 			fileChannel.force(false);
 			flushPosition = writePosition;
@@ -129,7 +131,7 @@ public class AppendFile implements Closeable, Persistently {
 		ByteBuffer buffer = ByteBuffer.allocate(HEAD_LENGTH);
 		buffer.putShort(version);
 		buffer.putLong(createTime);
-		buffer.put(new byte[54]);
+		buffer.put(BLANK_BYTES);
 		buffer.flip();
 		append0(buffer);
 	}
@@ -230,6 +232,16 @@ public class AppendFile implements Closeable, Persistently {
 			throw new IllegalArgumentException("Read offset " + offset + " invalid for " + this);
 		}
 		return read((int) (offset % fileLength), size);
+	}
+
+	public void read(long offset, ByteBuffer target) {
+		if (offset < id || offset > id + fileLength) {
+			throw new IllegalArgumentException("Read offset " + offset + " invalid for " + this);
+		}
+		int readPosition = (int) (offset % fileLength);
+		int limit = Math.min(target.limit(), fileLength - readPosition);
+		target.limit(limit);
+		readData(readPosition + HEAD_LENGTH, target);
 	}
 
 	/**

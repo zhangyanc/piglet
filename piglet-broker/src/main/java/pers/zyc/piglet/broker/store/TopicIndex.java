@@ -15,7 +15,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 /**
  * @author zhangyancheng
  */
-public class TopicIndex implements Persistently {
+public class TopicIndex implements MapFile {
 
 	private final String topic;
 
@@ -54,8 +54,8 @@ public class TopicIndex implements Persistently {
 	}
 
 	@Override
-	public void persistent() {
-		Locks.execute(rwLock.readLock(), () -> indexQueueMap.values().forEach(IndexQueue::persistent));
+	public void flush() {
+		Locks.execute(rwLock.readLock(), () -> indexQueueMap.values().forEach(IndexQueue::flush));
 	}
 
 	private IndexQueue createQueue(short queueNum) {
@@ -91,7 +91,7 @@ public class TopicIndex implements Persistently {
 	}
 
 	public short getQueues() {
-		return Locks.execute(rwLock.readLock(), () -> this.queues);
+		return Locks.execute(rwLock.readLock(), () -> queues);
 	}
 
 	public IndexQueue getIndexQueue(short queueNum) {

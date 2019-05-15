@@ -5,9 +5,9 @@ import java.io.File;
 /**
  * @author zhangyancheng
  */
-public interface Persistently {
+public interface MapFile {
 
 	File getFile();
 
-	void persistent();
+	void flush();
 }

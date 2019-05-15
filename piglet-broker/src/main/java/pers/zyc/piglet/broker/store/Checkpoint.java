@@ -17,7 +17,7 @@ import java.util.zip.Adler32;
  *
  * @author zhangyancheng
  */
-class Checkpoint implements Closeable, Persistently {
+class Checkpoint implements Closeable, MapFile {
 
 	private static final int CP_DATA_LENGTH = 16 + 4;
 	private static final int CP_NEXT_POS = 1004;
@@ -65,7 +65,7 @@ class Checkpoint implements Closeable, Persistently {
 	}
 
 	@Override
-	public void persistent() {
+	public void flush() {
 		dataBuffer.clear();
 
 		timestamp = SystemMillis.current();

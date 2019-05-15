@@ -5,6 +5,8 @@ import io.netty.buffer.Unpooled;
 import lombok.extern.slf4j.Slf4j;
 import pers.zyc.piglet.ByteBufPool;
 import pers.zyc.piglet.ChecksumException;
+import pers.zyc.piglet.SystemCode;
+import pers.zyc.piglet.SystemException;
 import pers.zyc.piglet.broker.store.file.AppendDir;
 import pers.zyc.piglet.broker.store.file.AppendFile;
 import pers.zyc.piglet.model.BrokerMessage;
@@ -13,6 +15,7 @@ import pers.zyc.tools.utils.SystemMillis;
 import pers.zyc.tools.utils.event.EventBus;
 import pers.zyc.tools.utils.lifecycle.Service;
 import pers.zyc.tools.utils.lifecycle.ThreadService;
+import sun.nio.ch.DirectBuffer;
 
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -75,47 +78,67 @@ public class LogService extends Service {
 
 	void recover(long recoverOffset) {
 		log.info("Log recover from {}", recoverOffset);
+		ByteBuffer blockBuffer = ByteBuffer.allocateDirect(StoreConfig.LOG_RECOVER_READ_BLOCK_SIZE);
 		AppendFile[] appendFiles = logAppendDir.getAllFiles();
-		files:for (AppendFile file : appendFiles) {
-			if (file.getMaxOffset() <= recoverOffset) {
+		files:for (int i = 0; i < appendFiles.length; i++) {
+			AppendFile file = appendFiles[i];
+			long fileEndOffset = file.getMaxOffset();
+			if (fileEndOffset <= recoverOffset) {
 				continue;
 			}
-			long fileEndOffset = file.getId() + file.getFileLength();
 			boolean fileReadEnd;
-			file:do {
-				ByteBuffer blockData = file.read(recoverOffset, 5 * 1024 * 1024);
-				fileReadEnd = recoverOffset + blockData.remaining() == fileEndOffset;
-				while (blockData.remaining() > 4) {
-					blockData.mark();
-					int nextMessageSize = blockData.getInt();
+			do {
+				blockBuffer.clear();
+				file.read(recoverOffset, blockBuffer);
+				fileReadEnd = recoverOffset + blockBuffer.remaining() == fileEndOffset;
+				while (blockBuffer.remaining() > 4) {
+					blockBuffer.mark();
+					int nextMessageSize = blockBuffer.getInt();
 					if (nextMessageSize == -1) {
-						// 文件末尾，一定不是最后一个文件，设置到下个文件开头继续读取
-						recoverOffset = fileEndOffset;
-						break file;
+						// 文件末尾，一定不是最后一个文件
+						if (i == appendFiles.length - 1) {
+							throw new SystemException(SystemCode.STORE_BAD_FILE.getCode(),
+									"Log recover failed, expect more file after " + file.getId());
+						}
+						fileReadEnd = true;
+						break;
 					} else if (nextMessageSize == 0) {
 						// 数据末尾，一定是最后一个文件
-						break file;
+						if (i != appendFiles.length - 1) {
+							throw new SystemException(SystemCode.STORE_BAD_FILE.getCode(),
+									"Log recover failed, unexpected file after " + file.getId());
+						}
+						break files;
 					} else {
-						if (blockData.remaining() < nextMessageSize - 4) {
-							// 块数据不足错误
+						if (blockBuffer.remaining() < nextMessageSize - 4) {
+							// 块数据不足
 							break;
 						}
-						blockData.reset();
+						blockBuffer.reset();
 						try {
-							BrokerMessage message = decode(blockData);
+							BrokerMessage message = decode(blockBuffer);
 							reIndex(message);
 							recoverOffset += nextMessageSize;
 						} catch (ChecksumException e) {
-							log.error("Log data checksum error, recover finish.");
+							log.error("Log data checksum error, file id: " + file.getId());
+							if (i != appendFiles.length - 1) {
+								throw new SystemException(SystemCode.STORE_BAD_FILE.getCode(),
+										"Log recover failed, decode checksum error");
+							}
 							break files;
 						}
 					}
 				}
+				if (fileReadEnd && i < appendFiles.length - 1) {
+					//非最后一个文件，定位到下个文件开始继续恢复
+					recoverOffset = fileEndOffset;
+				}
 			} while (!fileReadEnd);
 		}
+		((DirectBuffer) blockBuffer).cleaner().clean();
 
 		log.info("Log recovered offset {}", recoverOffset);
-		indexService.persistent();
+		indexService.flush();
 		logAppendDir.truncate(recoverOffset);
 	}
 
@@ -126,7 +149,7 @@ public class LogService extends Service {
 		indexContext.setMessageSize(message.getSize());
 		IndexQueue queue = indexService.getIndexQueue(message.getTopic(), message.getQueueNum());
 		indexContext.setQueue(queue);
-		indexService.index(indexContext);
+		indexService.writeIndex(indexContext);
 	}
 
 	void writeMessage(BrokerMessage message) throws Exception {
@@ -140,14 +163,23 @@ public class LogService extends Service {
 
 			boolean flush = flushCondition.reachedWhen(message.getSize());
 			if (flush) {
-				latches++;// 刷盘等待
+				latches++;// 等待刷盘
 			}
 
 			CountDownLatch latch = new CountDownLatch(latches);
 
-			appendQueue.add(new MsgAppendContext(message, byteBuf, flush, latch));
+			MsgAppendContext ctx = new MsgAppendContext(message, byteBuf, flush, latch);
 
-			boolean success = latch.await(100000000, TimeUnit.MILLISECONDS);
+			if (!appendQueue.add(ctx, storeConfig.getAppendEnqueueTimeout(), TimeUnit.MILLISECONDS)) {
+				throw new SystemException(SystemCode.STORE_SERVICE_BUSY.getCode(),
+						"Append enqueue timeout, exceed " + storeConfig.getAppendEnqueueTimeout() + "ms");
+			}
+
+			boolean storeSuccess = latch.await(storeConfig.getStoreMsgTimeout(), TimeUnit.MILLISECONDS);
+			if (!storeSuccess) {
+				throw new SystemException(SystemCode.STORE_SERVICE_BUSY.getCode(),
+						"Store message timeout, exceed " + storeConfig.getStoreMsgTimeout() + "ms");
+			}
 		} finally {
 			byteBufPool.recycle(byteBuf);
 		}
@@ -170,6 +202,8 @@ public class LogService extends Service {
 					for (MsgAppendContext appendContext : contexts) {
 						try {
 							appendMessage(appendContext);
+						} catch (InterruptedException e) {
+							throw e;
 						} catch (Exception e) {
 							storeEventBus.add(StoreEvent.create(e));
 						}
@@ -179,7 +213,7 @@ public class LogService extends Service {
 		}
 	}
 
-	private void appendMessage(MsgAppendContext ctx) {
+	private void appendMessage(MsgAppendContext ctx) throws Exception {
 		// 在最后一个日志文件追加写入
 		AppendFile logFile = logAppendDir.getLastFile();
 		int writeRemain = logFile.remaining();
@@ -192,7 +226,7 @@ public class LogService extends Service {
 			}
 
 			logFile.append(blankBuffer);
-			logFile.persistent();
+			logFile.flush();
 			logFile = logAppendDir.createNewFile();
 		}
 		// 计算并写入日志偏移量
@@ -216,7 +250,10 @@ public class LogService extends Service {
 		ctx.latch.countDown();
 
 		if (ctx.flush) {
-			commitQueue.add(ctx);
+			if (!commitQueue.add(ctx, storeConfig.getCommitEnqueueTimeout(), TimeUnit.MILLISECONDS)) {
+				throw new SystemException(SystemCode.STORE_SERVICE_BUSY.getCode(),
+						"Commit enqueue timeout, exceed " + storeConfig.getCommitEnqueueTimeout() + "ms");
+			}
 		}
 
 		// 索引消息
@@ -225,7 +262,7 @@ public class LogService extends Service {
 		indexContext.setIndexOffset(indexOffset);
 		indexContext.setLogOffset(logOffset);
 		indexContext.setMessageSize(ctx.message.getSize());
-		indexService.writeIndex(indexContext);
+		indexService.index(indexContext);
 	}
 
 	private class LogGroupCommitter extends ThreadService {
@@ -243,7 +280,7 @@ public class LogService extends Service {
 				protected void execute() throws InterruptedException {
 					List<MsgAppendContext> contexts = commitQueue.fetch();
 					try {
-						logAppendDir.getLastFile().persistent();
+						logAppendDir.getLastFile().flush();
 						contexts.forEach(ctx -> ctx.latch.countDown());
 					} catch (Exception e) {
 						storeEventBus.add(StoreEvent.create(e));

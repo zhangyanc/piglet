@@ -13,13 +13,14 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 /**
  * @author zhangyancheng
  */
 @Slf4j
-public class IndexService extends ThreadService implements Persistently {
+public class IndexService extends ThreadService implements MapFile {
 
 	/**
 	 * 索引目录
@@ -55,6 +56,7 @@ public class IndexService extends ThreadService implements Persistently {
 	@Override
 	protected void doStart() throws Exception {
 		indexAppender.start();
+		log.info("Index service started, checkpoint: {}", logIndexedOffset);
 	}
 
 	@Override
@@ -81,9 +83,9 @@ public class IndexService extends ThreadService implements Persistently {
 			@Override
 			protected void execute() throws InterruptedException {
 				try {
-					persistent();
+					flush();
 				} catch (Exception e) {
-					log.error("Index persistent failed", e);
+					log.error("Index flush failed", e);
 					storeEventBus.offer(StoreEvent.create(e));
 				}
 			}
@@ -96,14 +98,14 @@ public class IndexService extends ThreadService implements Persistently {
 	}
 
 	@Override
-	public void persistent() {
+	public void flush() {
 		long offsetBeforePersistent = getLogIndexedOffset();
 
 		if (offsetBeforePersistent > checkpoint.getCheckpointOffset()) {
-			topicIndexMap.values().forEach(TopicIndex::persistent);
-			log.info("Index data is persistent, log offset: {}", offsetBeforePersistent);
+			topicIndexMap.values().forEach(TopicIndex::flush);
+			log.info("Index data is flushed, log offset: {}", offsetBeforePersistent);
 			checkpoint.setCheckpointOffset(offsetBeforePersistent);
-			checkpoint.persistent();
+			checkpoint.flush();
 		}
 	}
 
@@ -147,12 +149,15 @@ public class IndexService extends ThreadService implements Persistently {
 		topicIndex.updateQueueCount(queues);
 	}
 
-	public void writeIndex(IndexContext context) {
-		indexQueue.add(context);
+	public void index(IndexContext context) throws Exception {
+		if (!indexQueue.add(context, storeConfig.getIndexEnqueueTimeout(), TimeUnit.MILLISECONDS)) {
+			throw new SystemException(SystemCode.STORE_SERVICE_BUSY.getCode(),
+					"Index enqueue timeout, exceed " + storeConfig.getIndexEnqueueTimeout() + "ms");
+		}
 		context.getQueue().updateOffset();
 	}
 
-	public void index(IndexContext indexContext) {
+	public void writeIndex(IndexContext indexContext) {
 		IndexQueue queue = indexContext.getQueue();
 		long indexedOffset = indexContext.getLogOffset() + indexContext.getMessageSize();
 		if (indexContext.isRecover()) {
@@ -186,7 +191,7 @@ public class IndexService extends ThreadService implements Persistently {
 				protected void execute() throws InterruptedException {
 					List<IndexContext> contexts = indexQueue.fetch();
 					try {
-						contexts.forEach(IndexService.this::index);
+						contexts.forEach(IndexService.this::writeIndex);
 					} catch (Exception e) {
 						storeEventBus.add(StoreEvent.create(e));
 					}

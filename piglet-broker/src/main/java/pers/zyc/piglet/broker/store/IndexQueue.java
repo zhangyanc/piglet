@@ -15,7 +15,7 @@ import java.nio.ByteBuffer;
  * @author zhangyancheng
  */
 @Getter
-public class IndexQueue implements Persistently, Closeable{
+public class IndexQueue implements MapFile, Closeable{
 
 	/**
 	 * 主题
@@ -61,7 +61,6 @@ public class IndexQueue implements Persistently, Closeable{
 	@Override
 	public void close() {
 		((DirectBuffer) itemBuffer).cleaner().clean();
-		persistent();
 	}
 
 	@Override
@@ -70,12 +69,13 @@ public class IndexQueue implements Persistently, Closeable{
 	}
 
 	@Override
-	public void persistent() {
+	public void flush() {
 		// 因为切换文件时上一个文件已经持久化，因此只需要持久化最后一个文件
-		appendDir.getLastFile().persistent();
+		appendDir.getLastFile().flush();
 	}
 
 	boolean delete() {
+		close();
 		appendDir.close();
 		return directory.delete();
 	}
@@ -89,7 +89,7 @@ public class IndexQueue implements Persistently, Closeable{
 		// 因为切换文件时上一个文件已经刷盘，因此只需要恢复最后一个文件
 		AppendFile lastFile = appendDir.getLastFile();
 		offset = lastFile.getId();
-		int splits = 10;
+		int splits = StoreConfig.INDEX_RECOVER_READ_SPLITS;
 		int blockSize = lastFile.getFileLength() / splits;
 		long logOffset = -1;
 		int readPosition = 0;
@@ -125,7 +125,7 @@ public class IndexQueue implements Persistently, Closeable{
 		AppendFile lastFile = appendDir.getLastFile();
 		if (lastFile.remaining() < IndexItem.LENGTH) {
 			// 切换文件时需要将上一个文件刷盘
-			lastFile.persistent();
+			lastFile.flush();
 			lastFile = appendDir.createNewFile();
 		}
 		if (lastFile.getWritePosition() != indexItem.getIndexOffset() - lastFile.getId()) {
