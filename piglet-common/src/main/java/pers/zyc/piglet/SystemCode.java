@@ -29,8 +29,10 @@ public enum SystemCode {
 	CONSUMER_NOT_EXISTS(-106, "Consumer not exists"),
 	TOPIC_NOT_EXISTS(-107, "Topic not exists"),
 
-	STORE_BAD_FILE(-201, "Bad file"),
-	STORE_WRONG_OFFSET(-202, "Wrong offset"),
+	STORE_SERVICE_BUSY(-200, "Store service busy"),
+	STORE_SERVICE_UNAVAILABLE(-201, "Store service unavailable"),
+	STORE_BAD_FILE(-202, "Bad file"),
+	STORE_WRONG_OFFSET(-203, "Wrong offset"),
 	
 	;
 	
